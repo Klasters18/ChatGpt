@@ -166,9 +166,7 @@ class App:
  def on_press(self,key):
     if self.inject or not self.settings.get("enabled",True):return
     try:
-      if key in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab,
-                 self.keyboard.Key.period, self.keyboard.Key.comma, self.keyboard.Key.semicolon,
-                 self.keyboard.Key.colon, self.keyboard.Key.exclamation_mark, self.keyboard.Key.question_mark):
+      if key in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab):
         w=self.buffer
         self.buffer=""
         if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
@@ -179,11 +177,19 @@ class App:
       else:
         c=getattr(key,"char",None)
         if c and c.isalpha():self.buffer=(self.buffer+c)[-64:]
+        elif c in (".", ",", ";", ":", "!", "?"):
+          w=self.buffer
+          self.buffer=""
+          if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
+            self.pending.put((w, c))
         elif c:self.buffer=""
     except Exception as e:
       log_debug("on_press exception: " + repr(e) + " " + traceback.format_exc())
  def correct_after_delimiter(self,w,delimiter):
-    self.correct(w,delimiter)
+    if isinstance(delimiter, str):
+      self.correct(w, delimiter)
+    else:
+      self.correct(w, delimiter)
  def correct(self,w,delimiter=None):
     low=w.lower()
     log_debug("word boundary: " + repr(w) + "; foreground=" + foreground_exe())
@@ -225,9 +231,7 @@ class App:
       if delimiter == self.keyboard.Key.space:self.controller.tap(self.keyboard.Key.space)
       elif delimiter == self.keyboard.Key.enter:self.controller.tap(self.keyboard.Key.enter)
       elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
-      else:
-        chars={self.keyboard.Key.period:".",self.keyboard.Key.comma:",",self.keyboard.Key.semicolon:";",self.keyboard.Key.colon:":",self.keyboard.Key.exclamation_mark:"!",self.keyboard.Key.question_mark:"?"}
-        if delimiter in chars:self.controller.type(chars[delimiter])
+      elif isinstance(delimiter, str):self.controller.type(delimiter)
       self.last=(old,new,time.time())
       log_debug("replaced " + repr(old) + " -> " + repr(new))
     except Exception as e:
