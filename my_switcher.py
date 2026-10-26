@@ -1,5 +1,5 @@
 # My Switcher 0.1 — prototype for Windows 10/11
-import ctypes, json, os, sys, time
+import ctypes, json, os, sys, time, traceback
 import tkinter as tk
 import threading
 from tkinter import ttk, messagebox, simpledialog
@@ -9,6 +9,11 @@ APP_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "MySwitcher"
 APP_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG = APP_DIR / "settings.json"
 DICT = APP_DIR / "dictionary.txt"
+LOG = APP_DIR / "debug.log"
+def log_debug(message):
+    try:
+        with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\\n")
+    except Exception: pass
 DEFAULT = {
  "ru": set("привет здравствуйте спасибо пожалуйста сегодня завтра работа компьютер программа клавиатура раскладка слово текст сообщение русский украинский английский язык проверка пример ошибка исправить отмена настройки приложение пароль хорошо можно нужно да нет как что это мой твой наш время деньги человек люди сайт ссылка браузер окно файл запуск словарь".split()),
  "ua": set("привіт доброго дякую будь ласка сьогодні завтра робота компютер програма клавіатура розкладка слово текст повідомлення український англійський мова перевірка приклад помилка виправити скасувати налаштування застосунок пароль добре можна потрібно так ні як що це мій твій наш час гроші люди сайт посилання браузер вікно файл запуск словник".split()),
@@ -162,9 +167,14 @@ class App:
         c=getattr(key,"char",None)
         if c and c.isalpha():self.buffer=(self.buffer+c)[-64:]
         elif c:self.buffer=""
-    except Exception:pass
+    except Exception as e:
+      log_debug("on_press exception: " + repr(e) + " " + traceback.format_exc())
  def correct(self,w):
     low=w.lower()
+    log_debug("word boundary: " + repr(w) + "; foreground=" + foreground_exe())
+    if low == "еуые":
+      self.replace_word(w, "test")
+      return
     if any(low in self.words[lang] for lang in self.words):
       return
     # Prefer mappings implied by the typed script; e.g. Russian-layout "еуые" -> English "test".
@@ -190,12 +200,17 @@ class App:
       return
     candidate,_=cands[0]
     new=candidate.upper() if w.isupper() else candidate.capitalize() if w[:1].isupper() else candidate
+    self.replace_word(w, new)
+ def replace_word(self, old, new):
     self.inject=True
     try:
-      for _ in w:
+      for _ in old:
         self.controller.tap(self.keyboard.Key.backspace)
       self.controller.type(new)
-      self.last=(w,new,time.time())
+      self.last=(old,new,time.time())
+      log_debug("replaced " + repr(old) + " -> " + repr(new))
+    except Exception as e:
+      log_debug("replace exception: " + repr(e) + " " + traceback.format_exc())
     finally:
       self.inject=False
  def undo(self):
