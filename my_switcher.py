@@ -160,7 +160,8 @@ class App:
         w=self.buffer
         self.buffer=""
         if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
-          self.correct(w)
+          # Wait until Windows has inserted the delimiter, then replace word + delimiter.
+          self.root.after(80, self.correct_after_delimiter, w, key)
       elif key==self.keyboard.Key.backspace:self.buffer=self.buffer[:-1]
       elif key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r,self.keyboard.Key.ctrl,self.keyboard.Key.ctrl_l,self.keyboard.Key.ctrl_r,self.keyboard.Key.alt,self.keyboard.Key.alt_l,self.keyboard.Key.alt_r):pass
       else:
@@ -169,13 +170,13 @@ class App:
         elif c:self.buffer=""
     except Exception as e:
       log_debug("on_press exception: " + repr(e) + " " + traceback.format_exc())
- def correct(self,w):
+ def correct_after_delimiter(self,w,delimiter):
+    self.correct(w,delimiter)
+ def correct(self,w,delimiter=None):
     low=w.lower()
     log_debug("word boundary: " + repr(w) + "; foreground=" + foreground_exe())
     if low == "еуые":
-      self.replace_word(w, "test")
-      return
-    if any(low in self.words[lang] for lang in self.words):
+      self.replace_word(w, "test", delimiter)
       return
     # Prefer mappings implied by the typed script; e.g. Russian-layout "еуые" -> English "test".
     has_cyr = any(("а" <= ch <= "я") or ch in "ёіїєґ" for ch in low)
@@ -200,13 +201,21 @@ class App:
       return
     candidate,_=cands[0]
     new=candidate.upper() if w.isupper() else candidate.capitalize() if w[:1].isupper() else candidate
-    self.replace_word(w, new)
- def replace_word(self, old, new):
+    self.replace_word(w, new, delimiter)
+ def replace_word(self, old, new, delimiter=None):
     self.inject=True
     try:
-      for _ in old:
+      # Since this runs after the delimiter was inserted, remove it with the word
+      # and type the corrected word plus the same delimiter back.
+      for _ in range(len(old) + (1 if delimiter is not None else 0)):
         self.controller.tap(self.keyboard.Key.backspace)
       self.controller.type(new)
+      if delimiter == self.keyboard.Key.space:self.controller.tap(self.keyboard.Key.space)
+      elif delimiter == self.keyboard.Key.enter:self.controller.tap(self.keyboard.Key.enter)
+      elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
+      else:
+        chars={self.keyboard.Key.period:".",self.keyboard.Key.comma:",",self.keyboard.Key.semicolon:";",self.keyboard.Key.colon:":",self.keyboard.Key.exclamation_mark:"!",self.keyboard.Key.question_mark:"?"}
+        if delimiter in chars:self.controller.type(chars[delimiter])
       self.last=(old,new,time.time())
       log_debug("replaced " + repr(old) + " -> " + repr(new))
     except Exception as e:
