@@ -157,7 +157,7 @@ def activate_layout(lang):
         return False
 class App:
  def __init__(self):
-    self.settings,self.words=load(); self.buffer=""; self.inject=False; self.last=None; self.listener=None
+    self.settings,self.words=load(); self.buffer=""; self.buffer_hwnd=None; self.inject=False; self.last=None; self.listener=None
     self.pending=queue.Queue()
     self.root=tk.Tk(); self.root.title("My Switcher"); self.root.geometry("490x430")
     self.enabled=tk.BooleanVar(value=self.settings["enabled"]); self.startup=tk.BooleanVar(value=self.settings["startup"])
@@ -265,6 +265,10 @@ class App:
  def on_press(self,key):
     if self.inject or not self.settings.get("enabled",True):return
     try:
+      hwnd=foreground_window()
+      if self.buffer and self.buffer_hwnd and hwnd != self.buffer_hwnd:
+        self.buffer=""
+      self.buffer_hwnd=hwnd
       if key in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab):
         w=self.buffer
         self.buffer=""
@@ -287,14 +291,14 @@ class App:
  def correct_after_delimiter(self,w,delimiter):
     self.correct(w,delimiter)
  def correct(self,w,delimiter=None):
-    log_debug("word boundary: " + repr(w) + "; foreground=" + foreground_exe())
+    log_debug("word boundary received; length=" + str(len(w)) + "; foreground=" + foreground_exe())
     decision = suggest_correction(w, self.words)
     if not decision:
-      log_debug("no correction candidate: " + repr(w))
+      log_debug("no confident correction candidate; length=" + str(len(w)))
       return
     candidate, dst, score, current_score = decision
     new=candidate.upper() if w.isupper() else candidate.capitalize() if w[:1].isupper() else candidate
-    log_debug("candidate " + repr(new) + " language=" + dst + " score=" + str(score) + " current=" + str(current_score))
+    log_debug("confident correction selected; target=" + dst + " score=" + str(score) + " current=" + str(current_score))
     self.replace_word(w, new, delimiter)
     # Match Punto's core behavior: continue typing in the corrected language.
     activate_layout(dst)
@@ -311,7 +315,7 @@ class App:
       elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
       elif isinstance(delimiter, str):self.controller.type(delimiter)
       self.last=(old,new,time.time())
-      log_debug("replaced " + repr(old) + " -> " + repr(new))
+      log_debug("replacement completed; old_length=" + str(len(old)) + " new_length=" + str(len(new)))
     except Exception as e:
       log_debug("replace exception: " + repr(e) + " " + traceback.format_exc())
     finally:
