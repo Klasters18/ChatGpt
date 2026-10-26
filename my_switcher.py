@@ -106,7 +106,9 @@ def load():
     return s,words
 def foreground_window():
     try:
-        return ctypes.windll.user32.GetForegroundWindow()
+        user32 = ctypes.windll.user32
+        user32.GetForegroundWindow.restype = ctypes.c_void_p
+        return user32.GetForegroundWindow()
     except Exception:
         return 0
 
@@ -134,6 +136,10 @@ def activate_layout(lang):
         return False
     try:
         user32 = ctypes.windll.user32
+        user32.LoadKeyboardLayoutW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint]
+        user32.LoadKeyboardLayoutW.restype = ctypes.c_void_p
+        user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        user32.PostMessageW.restype = ctypes.c_int
         hkl = user32.LoadKeyboardLayoutW(klid, 0x00000001)  # KLF_ACTIVATE
         if not hkl:
             log_debug("keyboard layout not available: " + lang + " (" + klid + ")")
