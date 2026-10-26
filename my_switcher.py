@@ -104,10 +104,17 @@ def load():
         p=line.strip().lower().split()
         if len(p)>1 and p[0] in words: words[p[0]].update(p[1:])
     return s,words
+def foreground_window():
+    try:
+        return ctypes.windll.user32.GetForegroundWindow()
+    except Exception:
+        return 0
+
 def foreground_exe():
     try:
         u=ctypes.windll.user32; k=ctypes.windll.kernel32
-        hwnd=u.GetForegroundWindow(); pid=ctypes.c_ulong()
+        hwnd=foreground_window(); pid=ctypes.c_ulong()
+        if not hwnd:return ""
         u.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
         h=k.OpenProcess(0x1000,False,pid.value)
         if not h:return ""
@@ -116,6 +123,28 @@ def foreground_exe():
             return os.path.basename(b.value).lower() if k.QueryFullProcessImageNameW(h,0,b,ctypes.byref(n)) else ""
         finally:k.CloseHandle(h)
     except Exception:return ""
+
+def activate_layout(lang):
+    """Ask the foreground Windows text application to activate the target keyboard layout."""
+    if os.name != "nt":
+        return False
+    klid = {"en": "00000409", "ru": "00000419", "ua": "00000422"}.get(lang)
+    hwnd = foreground_window()
+    if not klid or not hwnd:
+        return False
+    try:
+        user32 = ctypes.windll.user32
+        hkl = user32.LoadKeyboardLayoutW(klid, 0x00000001)  # KLF_ACTIVATE
+        if not hkl:
+            log_debug("keyboard layout not available: " + lang + " (" + klid + ")")
+            return False
+        # WM_INPUTLANGCHANGEREQUEST; post to the actual foreground application.
+        ok = user32.PostMessageW(hwnd, 0x0050, 0, hkl)
+        log_debug("requested keyboard layout " + lang + "; posted=" + str(bool(ok)))
+        return bool(ok)
+    except Exception as e:
+        log_debug("layout switch exception: " + repr(e))
+        return False
 class App:
  def __init__(self):
     self.settings,self.words=load(); self.buffer=""; self.inject=False; self.last=None; self.listener=None
@@ -257,6 +286,8 @@ class App:
     new=candidate.upper() if w.isupper() else candidate.capitalize() if w[:1].isupper() else candidate
     log_debug("candidate " + repr(new) + " language=" + dst + " score=" + str(score) + " current=" + str(current_score))
     self.replace_word(w, new, delimiter)
+    # Match Punto's core behavior: continue typing in the corrected language.
+    activate_layout(dst)
  def replace_word(self, old, new, delimiter=None):
     self.inject=True
     try:
