@@ -2,6 +2,7 @@
 import ctypes, json, os, sys, time, traceback
 import tkinter as tk
 import threading
+import queue
 from tkinter import ttk, messagebox, simpledialog
 from pathlib import Path
 
@@ -12,7 +13,7 @@ DICT = APP_DIR / "dictionary.txt"
 LOG = APP_DIR / "debug.log"
 def log_debug(message):
     try:
-        with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\\n")
+        with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\n")
     except Exception: pass
 DEFAULT = {
  "ru": set("привет здравствуйте спасибо пожалуйста сегодня завтра работа компьютер программа клавиатура раскладка слово текст сообщение русский украинский английский язык проверка пример ошибка исправить отмена настройки приложение пароль хорошо можно нужно да нет как что это мой твой наш время деньги человек люди сайт ссылка браузер окно файл запуск словарь".split()),
@@ -58,6 +59,7 @@ def foreground_exe():
 class App:
  def __init__(self):
     self.settings,self.words=load(); self.buffer=""; self.inject=False; self.last=None; self.listener=None
+    self.pending=queue.Queue()
     self.root=tk.Tk(); self.root.title("My Switcher"); self.root.geometry("490x430")
     self.enabled=tk.BooleanVar(value=self.settings["enabled"]); self.startup=tk.BooleanVar(value=self.settings["startup"])
     f=ttk.Frame(self.root,padding=15); f.pack(fill="both",expand=True)
@@ -80,6 +82,7 @@ class App:
     self.root.bind("<Unmap>", self.on_minimize)
     self.start_tray()
     self.start_listener()
+    self.root.after(30, self.process_pending)
     self.root.mainloop()
  def start_tray(self):
     try:
@@ -151,6 +154,15 @@ class App:
       self.listener=keyboard.Listener(on_press=self.on_press);self.listener.daemon=True;self.listener.start()
       self.status.set("Работает локально · RU / UA / EN")
     except Exception as e:self.status.set("Ошибка клавиатурного модуля: "+str(e))
+ def process_pending(self):
+    try:
+      while True:
+        w, delimiter = self.pending.get_nowait()
+        self.root.after(80, self.correct_after_delimiter, w, delimiter)
+    except queue.Empty: pass
+    except Exception as e: log_debug("pending queue exception: " + repr(e))
+    try: self.root.after(30, self.process_pending)
+    except Exception: pass
  def on_press(self,key):
     if self.inject or not self.settings.get("enabled",True):return
     try:
@@ -160,8 +172,8 @@ class App:
         w=self.buffer
         self.buffer=""
         if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
-          # Wait until Windows has inserted the delimiter, then replace word + delimiter.
-          self.root.after(80, self.correct_after_delimiter, w, key)
+          # The listener runs on a background thread: queue work for Tk main thread.
+          self.pending.put((w, key))
       elif key==self.keyboard.Key.backspace:self.buffer=self.buffer[:-1]
       elif key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r,self.keyboard.Key.ctrl,self.keyboard.Key.ctrl_l,self.keyboard.Key.ctrl_r,self.keyboard.Key.alt,self.keyboard.Key.alt_l,self.keyboard.Key.alt_r):pass
       else:
