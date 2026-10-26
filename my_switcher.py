@@ -65,7 +65,7 @@ def _script(word):
         return "cyr"
     return "other"
 
-def suggest_correction(word):
+def suggest_correction(word, custom_words=None):
     """Return a different-layout candidate only when corpus frequency strongly supports it."""
     if not zipf_frequency or len(word) < 3 or _script(word) in ("mixed", "other"):
         return None
@@ -83,6 +83,10 @@ def suggest_correction(word):
         if candidate == low or not candidate.isalpha():
             continue
         score = _word_score(candidate, dst)
+        # User-added dictionary words can validate uncommon names and domain terms,
+        # but never override a clearly valid word in the current language.
+        if custom_words and candidate in custom_words.get(dst, set()):
+            score = max(score, MIN_WORD_ZIPF + 1.0)
         if score > candidates.get(candidate, (0.0, ""))[0]:
             candidates[candidate] = (score, dst)
     if not candidates:
@@ -284,7 +288,7 @@ class App:
     self.correct(w,delimiter)
  def correct(self,w,delimiter=None):
     log_debug("word boundary: " + repr(w) + "; foreground=" + foreground_exe())
-    decision = suggest_correction(w)
+    decision = suggest_correction(w, self.words)
     if not decision:
       log_debug("no correction candidate: " + repr(w))
       return
