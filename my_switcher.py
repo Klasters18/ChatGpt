@@ -149,9 +149,13 @@ class App:
  def on_press(self,key):
     if self.inject or not self.settings.get("enabled",True):return
     try:
-      if key==self.keyboard.Key.space or key in (self.keyboard.Key.enter,self.keyboard.Key.tab,self.keyboard.Key.period,self.keyboard.Key.comma,self.keyboard.Key.semicolon,self.keyboard.Key.colon,self.keyboard.Key.exclamation_mark,self.keyboard.Key.question_mark):
-        w=self.buffer;self.buffer=""
-        if len(w)>=4 and foreground_exe() not in self.settings.get("excluded_apps",[]):self.correct(w)
+      if key in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab,
+                 self.keyboard.Key.period, self.keyboard.Key.comma, self.keyboard.Key.semicolon,
+                 self.keyboard.Key.colon, self.keyboard.Key.exclamation_mark, self.keyboard.Key.question_mark):
+        w=self.buffer
+        self.buffer=""
+        if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
+          self.correct(w)
       elif key==self.keyboard.Key.backspace:self.buffer=self.buffer[:-1]
       elif key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r,self.keyboard.Key.ctrl,self.keyboard.Key.ctrl_l,self.keyboard.Key.ctrl_r,self.keyboard.Key.alt,self.keyboard.Key.alt_l,self.keyboard.Key.alt_r):pass
       else:
@@ -161,20 +165,39 @@ class App:
     except Exception:pass
  def correct(self,w):
     low=w.lower()
-    if any(low in self.words[l] for l in self.words):return
-    cands=set()
-    for s in ("ru","ua","en"):
-      for d in ("ru","ua","en"):
-        if s!=d:
-          c=convert(low,s,d).lower()
-          if c!=low and c in self.words[d]:cands.add((c,d))
-    if len(cands)!=1:return
-    c,_=next(iter(cands)); new=c.upper() if w.isupper() else c.capitalize() if w[:1].isupper() else c
+    if any(low in self.words[lang] for lang in self.words):
+      return
+    # Prefer mappings implied by the typed script; e.g. Russian-layout "еуые" -> English "test".
+    has_cyr = any(("а" <= ch <= "я") or ch in "ёіїєґ" for ch in low)
+    has_latin = any("a" <= ch <= "z" for ch in low)
+    if has_cyr and not has_latin:
+      pairs=[("ru","en"),("ua","en"),("ru","ua"),("ua","ru")]
+    elif has_latin and not has_cyr:
+      pairs=[("en","ru"),("en","ua")]
+    else:
+      pairs=[(src,dst) for src in ("ru","ua","en") for dst in ("ru","ua","en") if src!=dst]
+    cands=[]
+    for src,dst in pairs:
+      candidate=convert(low,src,dst).lower()
+      if candidate!=low and candidate in self.words[dst] and candidate not in [x[0] for x in cands]:
+        cands.append((candidate,dst))
+    if not cands:
+      return
+    if has_cyr and not has_latin:
+      english=[item for item in cands if item[1]=="en"]
+      if english: cands=english
+    if len(cands)!=1:
+      return
+    candidate,_=cands[0]
+    new=candidate.upper() if w.isupper() else candidate.capitalize() if w[:1].isupper() else candidate
     self.inject=True
     try:
-      for _ in w:self.controller.tap(self.keyboard.Key.backspace)
-      self.controller.type(new);self.last=(w,new,time.time())
-    finally:self.inject=False
+      for _ in w:
+        self.controller.tap(self.keyboard.Key.backspace)
+      self.controller.type(new)
+      self.last=(w,new,time.time())
+    finally:
+      self.inject=False
  def undo(self):
     if not self.last or time.time()-self.last[2]>60:
       messagebox.showinfo("Отмена","Нет недавнего исправления");return
