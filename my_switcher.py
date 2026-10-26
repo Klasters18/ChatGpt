@@ -1,6 +1,7 @@
 # My Switcher 0.1 — prototype for Windows 10/11
 import ctypes, json, os, sys, time
 import tkinter as tk
+import threading
 from tkinter import ttk, messagebox, simpledialog
 from pathlib import Path
 
@@ -70,8 +71,48 @@ class App:
     ttk.Separator(f).pack(fill="x",pady=10)
     ttk.Label(f,text="Прототип: исправление после пробела, только при единственном совпадении в локальном словаре.").pack(anchor="w")
     ttk.Label(f,text="Обработка выполняется локально.").pack(anchor="w",pady=3)
-    self.root.protocol("WM_DELETE_WINDOW",self.root.iconify)
-    self.start_listener(); self.root.mainloop()
+    self.root.protocol("WM_DELETE_WINDOW", self.hide_to_tray)
+    self.root.bind("<Unmap>", self.on_minimize)
+    self.start_tray()
+    self.start_listener()
+    self.root.mainloop()
+ def start_tray(self):
+    try:
+      import pystray
+      from PIL import Image, ImageDraw
+      img=Image.new("RGB",(64,64),(35,75,130))
+      d=ImageDraw.Draw(img); d.rounded_rectangle((3,3,61,61),radius=12,fill=(35,75,130))
+      d.text((10,20),"MS",fill="white")
+      menu=pystray.Menu(
+        pystray.MenuItem("Открыть My Switcher", lambda icon,item:self.show_window(), default=True),
+        pystray.MenuItem("Автоисправление вкл/выкл", lambda icon,item:self.root.after(0,self.toggle_enabled)),
+        pystray.MenuItem("Выход", lambda icon,item:self.root.after(0,self.exit_app)))
+      self.tray=pystray.Icon("MySwitcher",img,"My Switcher · RU / UA / EN",menu)
+      threading.Thread(target=self.tray.run,daemon=True).start()
+    except Exception as e:
+      self.status.set("Ошибка системного трея: "+str(e))
+ def hide_to_tray(self):
+    self.root.withdraw()
+ def on_minimize(self,event=None):
+    if event is not None and event.widget is self.root:
+      try:
+        if self.root.state()=="iconic": self.root.after(100,self.root.withdraw)
+      except Exception: pass
+ def show_window(self):
+    def show():
+      self.root.deiconify(); self.root.state("normal"); self.root.lift(); self.root.focus_force()
+    self.root.after(0,show)
+ def toggle_enabled(self):
+    self.enabled.set(not self.enabled.get()); self.save()
+ def exit_app(self):
+    try:
+      if self.listener: self.listener.stop()
+    except Exception: pass
+    try:
+      if getattr(self,"tray",None): self.tray.stop()
+    except Exception: pass
+    try: self.root.quit(); self.root.destroy()
+    except Exception: pass
  def save(self):
     self.settings["enabled"]=self.enabled.get(); CONFIG.write_text(json.dumps(self.settings,ensure_ascii=False,indent=2),encoding="utf-8")
  def set_startup(self):
