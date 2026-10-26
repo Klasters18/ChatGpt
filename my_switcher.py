@@ -256,8 +256,8 @@ class App:
  def process_pending(self):
     try:
       while True:
-        w, delimiter = self.pending.get_nowait()
-        self.root.after(80, self.correct_after_delimiter, w, delimiter)
+        w, delimiter, target_hwnd = self.pending.get_nowait()
+        self.root.after(80, self.correct_after_delimiter, w, delimiter, target_hwnd)
     except queue.Empty: pass
     except Exception as e: log_debug("pending queue exception: " + repr(e))
     try: self.root.after(30, self.process_pending)
@@ -274,7 +274,7 @@ class App:
         self.buffer=""
         if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
           # The listener runs on a background thread: queue work for Tk main thread.
-          self.pending.put((w, key))
+          self.pending.put((w, key, hwnd))
       elif key==self.keyboard.Key.backspace:self.buffer=self.buffer[:-1]
       elif key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r,self.keyboard.Key.ctrl,self.keyboard.Key.ctrl_l,self.keyboard.Key.ctrl_r,self.keyboard.Key.alt,self.keyboard.Key.alt_l,self.keyboard.Key.alt_r):pass
       else:
@@ -284,11 +284,14 @@ class App:
           w=self.buffer
           self.buffer=""
           if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
-            self.pending.put((w, c))
+            self.pending.put((w, c, hwnd))
         elif c:self.buffer=""
     except Exception as e:
       log_debug("on_press exception: " + repr(e) + " " + traceback.format_exc())
- def correct_after_delimiter(self,w,delimiter):
+ def correct_after_delimiter(self,w,delimiter,target_hwnd=None):
+    if target_hwnd and foreground_window() != target_hwnd:
+      log_debug("correction skipped because focus changed")
+      return
     self.correct(w,delimiter)
  def correct(self,w,delimiter=None):
     log_debug("word boundary received; length=" + str(len(w)) + "; foreground=" + foreground_exe())
