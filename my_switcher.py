@@ -3,6 +3,12 @@ import ctypes, json, os, sys, time, traceback
 import tkinter as tk
 import threading
 import queue
+from functools import lru_cache
+
+try:
+    from wordfreq import zipf_frequency
+except ImportError:
+    zipf_frequency = None
 from tkinter import ttk, messagebox, simpledialog
 from pathlib import Path
 
@@ -23,7 +29,7 @@ DEFAULT = {
 # QWERTY physical-key approximation; punctuation varies across Windows layouts.
 EN = "`qwertyuiop[]asdfghjkl;'zxcvbnm,./"
 RU = "ёйцукенгшщзхъфывапролджэячсмитьбю."
-UA = "'йцукенгшщзхїфівапролджєячсмитьбю."
+UA = "`йцукенгшщзхїфівапролджєячсмитьбю."
 MAPS = {
  ("en","ru"): dict(zip(EN,RU)), ("ru","en"): {v:k for k,v in dict(zip(EN,RU)).items()},
  ("en","ua"): dict(zip(EN,UA)), ("ua","en"): {v:k for k,v in dict(zip(EN,UA)).items()}
@@ -33,6 +39,60 @@ MAPS[("ua","ru")] = {c: MAPS[("en","ru")].get(MAPS[("ua","en")].get(c,c),c) for 
 def convert(word, src, dst):
     m = MAPS.get((src,dst),{})
     return "".join((m.get(ch.lower(),ch).upper() if ch.isupper() else m.get(ch,ch)) for ch in word)
+# Language-frequency based decision, instead of requiring a tiny hand-made dictionary.
+# wordfreq language codes use "uk" for Ukrainian.
+LANG_CODE = {"en": "en", "ru": "ru", "ua": "uk"}
+MIN_WORD_ZIPF = 2.0
+MIN_IMPROVEMENT = 1.0
+
+@lru_cache(maxsize=20000)
+def _word_score(word, lang):
+    if zipf_frequency is None:
+        return 0.0
+    try:
+        return float(zipf_frequency(word.lower(), LANG_CODE[lang]))
+    except Exception:
+        return 0.0
+
+def _script(word):
+    latin = any("a" <= ch.lower() <= "z" for ch in word)
+    cyrillic = any(("а" <= ch.lower() <= "я") or ch.lower() in "ёіїєґ" for ch in word)
+    if latin and cyrillic:
+        return "mixed"
+    if latin:
+        return "en"
+    if cyrillic:
+        return "cyr"
+    return "other"
+
+def suggest_correction(word):
+    """Return a different-layout candidate only when corpus frequency strongly supports it."""
+    if not zipf_frequency or len(word) < 3 or _script(word) in ("mixed", "other"):
+        return None
+    low = word.lower()
+    script = _script(low)
+    if script == "en":
+        current_score = _word_score(low, "en")
+        pairs = (("en", "ru"), ("en", "ua"))
+    else:
+        current_score = max(_word_score(low, "ru"), _word_score(low, "ua"))
+        pairs = (("ru", "en"), ("ua", "en"), ("ru", "ua"), ("ua", "ru"))
+    candidates = {}
+    for src, dst in pairs:
+        candidate = convert(low, src, dst).lower()
+        if candidate == low or not candidate.isalpha():
+            continue
+        score = _word_score(candidate, dst)
+        if score > candidates.get(candidate, (0.0, ""))[0]:
+            candidates[candidate] = (score, dst)
+    if not candidates:
+        return None
+    candidate, (score, dst) = max(candidates.items(), key=lambda item: item[1][0])
+    # Do not change a plausible existing word for an equally plausible alternative.
+    if score < MIN_WORD_ZIPF or score - current_score < MIN_IMPROVEMENT:
+        return None
+    return candidate, dst, score, current_score
+
 def load():
     s={"enabled":True,"startup":False,"excluded_apps":["code.exe","devenv.exe","powershell.exe","cmd.exe","windowsterminal.exe"]}
     try: s.update(json.loads(CONFIG.read_text(encoding="utf-8")))
@@ -186,39 +246,16 @@ class App:
     except Exception as e:
       log_debug("on_press exception: " + repr(e) + " " + traceback.format_exc())
  def correct_after_delimiter(self,w,delimiter):
-    if isinstance(delimiter, str):
-      self.correct(w, delimiter)
-    else:
-      self.correct(w, delimiter)
+    self.correct(w,delimiter)
  def correct(self,w,delimiter=None):
-    low=w.lower()
     log_debug("word boundary: " + repr(w) + "; foreground=" + foreground_exe())
-    if low == "еуые":
-      self.replace_word(w, "test", delimiter)
+    decision = suggest_correction(w)
+    if not decision:
+      log_debug("no correction candidate: " + repr(w))
       return
-    # Prefer mappings implied by the typed script; e.g. Russian-layout "еуые" -> English "test".
-    has_cyr = any(("а" <= ch <= "я") or ch in "ёіїєґ" for ch in low)
-    has_latin = any("a" <= ch <= "z" for ch in low)
-    if has_cyr and not has_latin:
-      pairs=[("ru","en"),("ua","en"),("ru","ua"),("ua","ru")]
-    elif has_latin and not has_cyr:
-      pairs=[("en","ru"),("en","ua")]
-    else:
-      pairs=[(src,dst) for src in ("ru","ua","en") for dst in ("ru","ua","en") if src!=dst]
-    cands=[]
-    for src,dst in pairs:
-      candidate=convert(low,src,dst).lower()
-      if candidate!=low and candidate in self.words[dst] and candidate not in [x[0] for x in cands]:
-        cands.append((candidate,dst))
-    if not cands:
-      return
-    if has_cyr and not has_latin:
-      english=[item for item in cands if item[1]=="en"]
-      if english: cands=english
-    if len(cands)!=1:
-      return
-    candidate,_=cands[0]
+    candidate, dst, score, current_score = decision
     new=candidate.upper() if w.isupper() else candidate.capitalize() if w[:1].isupper() else candidate
+    log_debug("candidate " + repr(new) + " language=" + dst + " score=" + str(score) + " current=" + str(current_score))
     self.replace_word(w, new, delimiter)
  def replace_word(self, old, new, delimiter=None):
     self.inject=True
