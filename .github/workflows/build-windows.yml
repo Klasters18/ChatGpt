@@ -1,4 +1,4 @@
-name: Build My Switcher for Windows
+name: Build My Switcher for Windows (EXE)
 
 on:
   workflow_dispatch:
