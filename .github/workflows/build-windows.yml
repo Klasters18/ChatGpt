@@ -1,4 +1,4 @@
-name: Build My Switcher for Windows (EXE)
+name: Build My Switcher for Windows (EXE + Installer)
 
 on:
   workflow_dispatch:
@@ -6,6 +6,8 @@ on:
     paths:
       - "my_switcher.py"
       - "requirements.txt"
+      - "installer.iss"
+      - "tests/**"
       - ".github/workflows/build-windows.yml"
 
 jobs:
@@ -20,12 +22,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-      - name: Check syntax
+      - name: Check Python syntax
         run: python -m py_compile my_switcher.py
-      - name: Build EXE
+      - name: Test keyboard layout mappings
+        run: python -m unittest discover -s tests -v
+      - name: Build portable EXE
         run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name MySwitcher my_switcher.py
-      - uses: actions/upload-artifact@v4
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Build Windows installer
+        shell: cmd
+        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss'
+      - name: Upload EXE and installer
+        uses: actions/upload-artifact@v4
         with:
           name: MySwitcher-Windows-x64
-          path: dist/MySwitcher.exe
+          path: |
+            dist/MySwitcher.exe
+            installer-output/MySwitcher-Setup-x64.exe
           if-no-files-found: error
