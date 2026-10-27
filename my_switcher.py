@@ -11,6 +11,7 @@ except ImportError:
     zipf_frequency = None
 from tkinter import ttk, messagebox, simpledialog
 from pathlib import Path
+from grammar_check import check_text, GrammarServiceError
 
 APP_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "MySwitcher"
 APP_DIR.mkdir(parents=True, exist_ok=True)
@@ -159,11 +160,11 @@ class App:
  def __init__(self):
     self.settings,self.words=load(); self.buffer=""; self.buffer_hwnd=None; self.inject=False; self.last=None; self.listener=None
     self.pending=queue.Queue()
-    self.root=tk.Tk(); self.root.title("My Switcher"); self.root.geometry("490x430")
+    self.root=tk.Tk(); self.root.title("My Switcher"); self.root.geometry("560x520")
     self.enabled=tk.BooleanVar(value=self.settings["enabled"]); self.startup=tk.BooleanVar(value=self.settings["startup"])
     f=ttk.Frame(self.root,padding=15); f.pack(fill="both",expand=True)
     ttk.Label(f,text="My Switcher",font=("Segoe UI",17,"bold")).pack(anchor="w")
-    ttk.Label(f,text="Автоисправление раскладки RU · UA · EN").pack(anchor="w",pady=(0,10))
+    ttk.Label(f,text="Раскладка + орфография и грамматика · RU / UA / EN").pack(anchor="w",pady=(0,10))
     self.status=tk.StringVar(value="Запуск…"); ttk.Label(f,textvariable=self.status).pack(anchor="w",pady=5)
     ttk.Checkbutton(f,text="Автоисправление включено",variable=self.enabled,command=self.save).pack(anchor="w",pady=3)
     ttk.Checkbutton(f,text="Запускать вместе с Windows",variable=self.startup,command=self.set_startup).pack(anchor="w",pady=3)
@@ -174,9 +175,10 @@ class App:
     ttk.Button(r,text="Открыть словарь",command=self.open_dict).pack(side="left")
     ttk.Button(r,text="Добавить слово",command=self.add_word).pack(side="left",padx=5)
     ttk.Button(r,text="Отмена последнего исправления",command=self.undo).pack(side="left")
+    ttk.Button(f,text="Проверить текст (орфография и грамматика)",command=self.open_grammar).pack(anchor="w",pady=5)
     ttk.Separator(f).pack(fill="x",pady=10)
-    ttk.Label(f,text="Прототип: исправление после пробела, только при единственном совпадении в локальном словаре.").pack(anchor="w")
-    ttk.Label(f,text="Обработка выполняется локально.").pack(anchor="w",pady=3)
+    ttk.Label(f,text="Раскладка обрабатывается локально. Проверка грамматики отправляет текст в LanguageTool.").pack(anchor="w",pady=3)
+    ttk.Label(f,text="Грамматические исправления только предлагаются — текст не меняется автоматически.").pack(anchor="w")
     self.root.protocol("WM_DELETE_WINDOW", self.hide_to_tray)
     self.root.bind("<Unmap>", self.on_minimize)
     self.start_tray()
@@ -246,6 +248,54 @@ class App:
     if word:
       with DICT.open("a",encoding="utf-8") as f:f.write(f"\n{lang.lower()} {word.lower()}\n")
       self.words[lang.lower()].add(word.lower())
+ def open_grammar(self):
+    win=tk.Toplevel(self.root)
+    win.title("Проверка орфографии и грамматики")
+    win.geometry("720x600")
+    win.transient(self.root)
+    outer=ttk.Frame(win,padding=12); outer.pack(fill="both",expand=True)
+    ttk.Label(outer,text="Вставьте текст для проверки. Он будет отправлен в LanguageTool (онлайн).",wraplength=680).pack(anchor="w",pady=(0,8))
+    controls=ttk.Frame(outer); controls.pack(fill="x",pady=(0,8))
+    ttk.Label(controls,text="Язык:").pack(side="left")
+    lang=tk.StringVar(value="ru")
+    ttk.Combobox(controls,textvariable=lang,values=("ru","ua","en"),state="readonly",width=8).pack(side="left",padx=6)
+    text_box=tk.Text(outer,wrap="word",height=10,undo=True)
+    text_box.pack(fill="both",expand=True)
+    result_box=tk.Text(outer,wrap="word",height=9,state="disabled")
+    result_box.pack(fill="both",expand=True,pady=(8,0))
+    status=tk.StringVar(value="Проверка не запускалась.")
+    ttk.Label(outer,textvariable=status).pack(anchor="w",pady=6)
+    def run_check():
+      value=text_box.get("1.0","end-1c")
+      if not value.strip():
+        status.set("Сначала введите или вставьте текст.")
+        return
+      check_btn.configure(state="disabled")
+      status.set("Проверяем…")
+      def worker():
+        try:
+          matches=check_text(value,lang.get())
+          def show():
+            result_box.configure(state="normal");result_box.delete("1.0","end")
+            if not matches:
+              result_box.insert("end","Ошибок по правилам LanguageTool не найдено.")
+            else:
+              for i,m in enumerate(matches,1):
+                start=m["offset"]; end=start+m["length"]
+                fragment=value[start:end]
+                replacement=", ".join(m["replacements"]) if m["replacements"] else "нет предложений"
+                result_box.insert("end",str(i)+". "+repr(fragment)+" — "+m["message"]+"\n   Варианты: "+replacement+"\n\n")
+            result_box.configure(state="disabled")
+            status.set("Проверка завершена. Найдено замечаний: "+str(len(matches))+".")
+            check_btn.configure(state="normal")
+          self.root.after(0,show)
+        except GrammarServiceError as exc:
+          self.root.after(0,lambda: (status.set(str(exc)),check_btn.configure(state="normal")))
+        except Exception as exc:
+          self.root.after(0,lambda: (status.set("Ошибка проверки: "+str(exc)),check_btn.configure(state="normal")))
+      threading.Thread(target=worker,daemon=True).start()
+    check_btn=ttk.Button(controls,text="Проверить",command=run_check)
+    check_btn.pack(side="left",padx=8)
  def start_listener(self):
     try:
       from pynput import keyboard
