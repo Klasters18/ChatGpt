@@ -290,9 +290,11 @@ class App:
             check_btn.configure(state="normal")
           self.root.after(0,show)
         except GrammarServiceError as exc:
-          self.root.after(0,lambda: (status.set(str(exc)),check_btn.configure(state="normal")))
+          message=str(exc)
+          self.root.after(0,lambda message=message: (status.set(message),check_btn.configure(state="normal")))
         except Exception as exc:
-          self.root.after(0,lambda: (status.set("Ошибка проверки: "+str(exc)),check_btn.configure(state="normal")))
+          message="Ошибка проверки: "+str(exc)
+          self.root.after(0,lambda message=message: (status.set(message),check_btn.configure(state="normal")))
       threading.Thread(target=worker,daemon=True).start()
     check_btn=ttk.Button(controls,text="Проверить",command=run_check)
     check_btn.pack(side="left",padx=8)
