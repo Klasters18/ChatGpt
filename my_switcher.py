@@ -23,8 +23,8 @@ def log_debug(message):
         with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\n")
     except Exception: pass
 DEFAULT = {
- "ru": set("привет здравствуйте спасибо пожалуйста сегодня завтра работа работы классно компьютер программа клавиатура раскладка слово текст сообщение русский украинский английский язык проверка пример ошибка исправить отмена настройки приложение пароль хорошо можно нужно да нет как что это мой твой наш время деньги человек люди сайт ссылка браузер окно файл запуск словарь".split()),
- "ua": set("привіт доброго дякую будь ласка сьогодні завтра робота компютер програма клавіатура розкладка слово текст повідомлення український англійський мова перевірка приклад помилка виправити скасувати налаштування застосунок пароль добре можна потрібно так ні як що це мій твій наш час гроші люди сайт посилання браузер вікно файл запуск словник".split()),
+ "ru": set("и в а я у к с о не на но да за по от до из мы вы он она они это что чтобы сделай сделай привет здравствуйте спасибо пожалуйста сегодня завтра работа работы классно компьютер клавиатура раскладка слово текст сообщение русский украинский английский язык проверка пример ошибка исправить отмена настройки приложение пароль хорошо можно нужно да нет как мой твой наш время деньги человек люди сайт ссылка браузер окно файл запуск словарь фраза".split()),
+ "ua": set("і в а я у к з о не на але так ні це що щоб зроби привіт доброго дякую будь ласка сьогодні завтра робота компютер програма клавіатура розкладка слово текст повідомлення український англійський мова перевірка приклад помилка виправити скасувати налаштування застосунок пароль добре можна потрібно як мій твій наш час гроші люди сайт посилання браузер вікно файл запуск словник фраза".split()),
  "en": set("hello hi thanks please today tomorrow work computer program keyboard layout word text message russian ukrainian english language test check example error correct undo settings application password good can need yes no what this my your our time money people website link browser window file launch dictionary".split())
 }
 # QWERTY physical-key approximation; punctuation varies across Windows layouts.
@@ -68,10 +68,21 @@ def _script(word):
 
 def suggest_correction(word, custom_words=None):
     """Return a different-layout candidate only when corpus frequency strongly supports it."""
-    if not zipf_frequency or len(word) < 3 or _script(word) in ("mixed", "other"):
+    if not zipf_frequency or len(word) < 1 or _script(word) in ("mixed", "other"):
         return None
     low = word.lower()
     script = _script(low)
+    # Common one-letter words are essential for phrase-level layout recovery:
+    # e.g. "b cltkfq xnj,s r ghbvthe" -> "и сделай чтобы к примеру".
+    # Only correct a single Latin character when its layout mapping is a common
+    # standalone RU/UA word; ordinary English words are otherwise left alone.
+    if len(low) == 1 and script == "en":
+        for dst in ("ru", "ua"):
+            candidate = convert(low, "en", dst).lower()
+            if candidate in custom_words.get(dst, set()) if custom_words else False:
+                if _word_score(low, "en") < 2.5:
+                    return candidate, dst, MIN_WORD_ZIPF + 1.0, _word_score(low, "en")
+        return None
     if script == "en":
         current_score = _word_score(low, "en")
         pairs = (("en", "ru"), ("en", "ua"))
