@@ -228,7 +228,7 @@ class App:
     self.settings["startup"]=self.startup.get();self.save()
     try:
       import winreg
-      key=winreg.OpenKey(winreg.HKEY_CURRENT_USER,r"Software\\Microsoft\\Windows\\CurrentVersion\\Run",0,winreg.KEY_SET_VALUE)
+      key=winreg.OpenKey(winreg.HKEY_CURRENT_USER,r"Software\Microsoft\Windows\CurrentVersion\Run",0,winreg.KEY_SET_VALUE)
       if self.startup.get(): winreg.SetValueEx(key,"MySwitcher",0,winreg.REG_SZ,f'"{sys.executable}"')
       else:
         try: winreg.DeleteValue(key,"MySwitcher")
@@ -270,11 +270,12 @@ class App:
       if not value.strip():
         status.set("Сначала введите или вставьте текст.")
         return
+      selected_language=lang.get()
       check_btn.configure(state="disabled")
       status.set("Проверяем…")
       def worker():
         try:
-          matches=check_text(value,lang.get())
+          matches=check_text(value,selected_language)
           def show():
             result_box.configure(state="normal");result_box.delete("1.0","end")
             if not matches:
