@@ -396,5 +396,13 @@ class App:
       self.controller.type(old);self.last=None
     finally:self.inject=False
 if __name__=="__main__":
-    if os.name!="nt": print("Windows 10/11 only")
-    App()
+    if os.name!="nt":
+        print("Windows 10/11 only")
+    else:
+        # Enforce a single running instance. Multiple keyboard listeners can
+        # compete while replacing the same typed word and cause inconsistent results.
+        _instance_mutex = ctypes.windll.kernel32.CreateMutexW(None, True, "Local\\MySwitcher_SingleInstance")
+        _already_running = ctypes.windll.kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
+        if _already_running:
+            sys.exit(0)
+        App()
