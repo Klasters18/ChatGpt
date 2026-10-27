@@ -325,15 +325,26 @@ class App:
       if key in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab):
         w=self.buffer
         self.buffer=""
+        delimiter = key
+        # A comma typed while the English layout is active may actually be the
+        # Russian/Ukrainian letter "б" in a mistyped word (e.g. hf,jns -> работы).
+        # If it is a trailing comma followed by a space, keep it as punctuation.
+        if w.endswith(",") and key == self.keyboard.Key.space:
+          w = w[:-1]
+          delimiter = ", "
         if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
           # The listener runs on a background thread: queue work for Tk main thread.
-          self.pending.put((w, key, hwnd))
+          self.pending.put((w, delimiter, hwnd))
       elif key==self.keyboard.Key.backspace:self.buffer=self.buffer[:-1]
       elif key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r,self.keyboard.Key.ctrl,self.keyboard.Key.ctrl_l,self.keyboard.Key.ctrl_r,self.keyboard.Key.alt,self.keyboard.Key.alt_l,self.keyboard.Key.alt_r):pass
       else:
         c=getattr(key,"char",None)
         if c and c.isalpha():self.buffer=(self.buffer+c)[-64:]
-        elif c in (".", ",", ";", ":", "!", "?"):
+        elif c == "," and self.buffer and _script(self.buffer) == "en":
+          # Do not split a potentially mistyped Cyrillic word at the physical comma
+          # key: on RU/UA layout that key produces "б".
+          self.buffer = (self.buffer + c)[-64:]
+        elif c in (".", ";", ":", "!", "?"):
           w=self.buffer
           self.buffer=""
           if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
