@@ -23,7 +23,7 @@ def log_debug(message):
         with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\n")
     except Exception: pass
 DEFAULT = {
- "ru": set("привет здравствуйте спасибо пожалуйста сегодня завтра работа компьютер программа клавиатура раскладка слово текст сообщение русский украинский английский язык проверка пример ошибка исправить отмена настройки приложение пароль хорошо можно нужно да нет как что это мой твой наш время деньги человек люди сайт ссылка браузер окно файл запуск словарь".split()),
+ "ru": set("привет здравствуйте спасибо пожалуйста сегодня завтра работа работы классно компьютер программа клавиатура раскладка слово текст сообщение русский украинский английский язык проверка пример ошибка исправить отмена настройки приложение пароль хорошо можно нужно да нет как что это мой твой наш время деньги человек люди сайт ссылка браузер окно файл запуск словарь".split()),
  "ua": set("привіт доброго дякую будь ласка сьогодні завтра робота компютер програма клавіатура розкладка слово текст повідомлення український англійський мова перевірка приклад помилка виправити скасувати налаштування застосунок пароль добре можна потрібно так ні як що це мій твій наш час гроші люди сайт посилання браузер вікно файл запуск словник".split()),
  "en": set("hello hi thanks please today tomorrow work computer program keyboard layout word text message russian ukrainian english language test check example error correct undo settings application password good can need yes no what this my your our time money people website link browser window file launch dictionary".split())
 }
@@ -93,6 +93,15 @@ def suggest_correction(word, custom_words=None):
     if not candidates:
         return None
     candidate, (score, dst) = max(candidates.items(), key=lambda item: item[1][0])
+    # Strong deterministic fallback: if the mistyped token is not in the
+    # current-language dictionary but its layout-converted form is a known word,
+    # prefer the dictionary match even when the corpus score is noisy. This fixes
+    # common words such as ghbdtn -> привет, while keeping valid "hello" unchanged.
+    if custom_words:
+        current_lang = "en" if script == "en" else ("ua" if _word_score(low, "ua") > _word_score(low, "ru") else "ru")
+        current_known = low in custom_words.get(current_lang, set())
+        if not current_known and candidate in custom_words.get(dst, set()):
+            return candidate, dst, max(score, MIN_WORD_ZIPF + 1.0), current_score
     # Do not change a plausible existing word for an equally plausible alternative.
     if score < MIN_WORD_ZIPF or score - current_score < MIN_IMPROVEMENT:
         return None
