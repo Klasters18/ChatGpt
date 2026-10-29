@@ -42,7 +42,7 @@ class LayoutMappingTests(unittest.TestCase):
         self.assertEqual(convert("ghbdtn", "en", "ua"), "привет")
         self.assertEqual(convert("руддщ", "ru", "en"), "hello")
         self.assertEqual(convert("руддщ", "ua", "en"), "hello")
-        self.assertEqual(convert("руддщ", "ru", "ua"), "геещщ")
+        self.assertEqual(convert("руддщ", "ru", "ua"), "руддщ")
         self.assertEqual(convert("руддщ", "ua", "ru"), "руддщ")
 
 
