@@ -352,7 +352,7 @@ class App:
         if w.endswith(",") and key == self.keyboard.Key.space:
           w = w[:-1]
           delimiter = ", "
-        if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
+        if len(w)>=1 and foreground_exe() not in self.settings.get("excluded_apps",[]):
           # The listener runs on a background thread: queue work for Tk main thread.
           self.pending.put((w, delimiter, hwnd))
       elif key==self.keyboard.Key.backspace:self.buffer=self.buffer[:-1]
@@ -367,7 +367,7 @@ class App:
         elif c in (".", ";", ":", "!", "?"):
           w=self.buffer
           self.buffer=""
-          if len(w)>=2 and foreground_exe() not in self.settings.get("excluded_apps",[]):
+          if len(w)>=1 and foreground_exe() not in self.settings.get("excluded_apps",[]):
             self.pending.put((w, c, hwnd))
         elif c:self.buffer=""
     except Exception as e:
