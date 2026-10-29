@@ -46,5 +46,18 @@ class LayoutMappingTests(unittest.TestCase):
         self.assertEqual(convert("руддщ", "ua", "ru"), "руддщ")
 
 
+    def test_phrase_tokens_are_corrected_by_layout_without_grammar_rewriting(self):
+        words = {k: set(v) for k, v in my_switcher.DEFAULT.items()}
+        with patch("my_switcher.zipf_frequency", return_value=0.0):
+            my_switcher._word_score.cache_clear()
+            self.assertEqual(suggest_correction("b", words)[0:2], ("и", "ru"))
+            self.assertEqual(suggest_correction("cltkfq", words)[0:2], ("сделай", "ru"))
+            self.assertEqual(suggest_correction("xnj,s", words)[0:2], ("чтобы", "ru"))
+            self.assertEqual(suggest_correction("r", words)[0:2], ("к", "ru"))
+            self.assertEqual(suggest_correction("ghbvthe", words)[0:2], ("примере", "ru"))
+            self.assertIsNone(suggest_correction("hello", words))
+        my_switcher._word_score.cache_clear()
+
+
 if __name__ == "__main__":
     unittest.main()
