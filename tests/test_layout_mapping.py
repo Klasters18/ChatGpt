@@ -30,5 +30,21 @@ class LayoutMappingTests(unittest.TestCase):
         my_switcher._word_score.cache_clear()
 
 
+    def test_single_letter_english_token_can_be_corrected_to_russian(self):
+        words = {k: set(v) for k, v in my_switcher.DEFAULT.items()}
+        with patch("my_switcher.zipf_frequency", return_value=0.0):
+            my_switcher._word_score.cache_clear()
+            self.assertEqual(suggest_correction("b", words)[0:2], ("и", "ru"))
+        my_switcher._word_score.cache_clear()
+
+    def test_all_six_layout_directions_map_letters(self):
+        self.assertEqual(convert("ghbdtn", "en", "ru"), "привет")
+        self.assertEqual(convert("ghbdtn", "en", "ua"), "привет")
+        self.assertEqual(convert("руддщ", "ru", "en"), "hello")
+        self.assertEqual(convert("руддщ", "ua", "en"), "hello")
+        self.assertEqual(convert("руддщ", "ru", "ua"), "геещщ")
+        self.assertEqual(convert("руддщ", "ua", "ru"), "руддщ")
+
+
 if __name__ == "__main__":
     unittest.main()
