@@ -54,7 +54,7 @@ class LayoutMappingTests(unittest.TestCase):
             self.assertEqual(suggest_correction("cltkfq", words)[0:2], ("сделай", "ru"))
             self.assertEqual(suggest_correction("xnj,s", words)[0:2], ("чтобы", "ru"))
             self.assertEqual(suggest_correction("r", words)[0:2], ("к", "ru"))
-            self.assertEqual(suggest_correction("ghbvthe", words)[0:2], ("примере", "ru"))
+            self.assertEqual(suggest_correction("ghbvthe", words)[0:2], ("примеру", "ru"))
             self.assertIsNone(suggest_correction("hello", words))
         my_switcher._word_score.cache_clear()
 
