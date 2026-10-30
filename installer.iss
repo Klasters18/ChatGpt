@@ -1,7 +1,7 @@
 [Setup]
 AppId={{E13C44A8-2E73-4E93-A6E8-4A8C3E97B5D1}
 AppName=My Switcher
-AppVersion=0.2.0
+AppVersion=0.3.0
 AppPublisher=My Switcher
 DefaultDirName={autopf}\My Switcher
 DefaultGroupName=My Switcher
