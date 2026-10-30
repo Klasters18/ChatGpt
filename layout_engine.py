@@ -103,6 +103,24 @@ class LayoutEngine:
             out.append(candidate)
         return out
 
+
+    def explain_phrase(self, phrase, custom_words=None):
+        raw=phrase.strip().split()
+        if not raw or any(not WORD_RE.match(w) for w in raw):
+            return {"source":"invalid","candidates":{}}
+        scripts={script_of(w) for w in raw}
+        if len(scripts)!=1 or scripts & {"mixed","other"}:
+            return {"source":"mixed","candidates":{}}
+        source=next(iter(scripts))
+        baseline_langs=("en",) if source=="en" else ("ru","ua")
+        baseline=max(self.phrase_score([w.lower() for w in raw],l,custom_words) for l in baseline_langs)
+        candidates={}
+        for lang in ("ru","ua","en"):
+            words=self.candidate_words(raw,lang)
+            if words:
+                candidates[lang]={"text":" ".join(words),"score":round(self.phrase_score(words,lang,custom_words),3)}
+        return {"source":source,"baseline":round(baseline,3),"candidates":candidates}
+
     def suggest_phrase(self, phrase, custom_words=None):
         raw=phrase.strip().split()
         if not raw or any(not WORD_RE.match(w) for w in raw): return None
@@ -120,8 +138,8 @@ class LayoutEngine:
         if not ranked: return None
         score,lang,words=max(ranked,key=lambda x:x[0])
         improvement=score-baseline
-        required=1.35 if len(raw)>=2 else 1.8
-        if score < 2.2*len(raw) or improvement < required: return None
+        required=0.9 if len(raw)>=2 else 1.8
+        if score < 1.8*len(raw) or improvement < required: return None
         corrected_words=[]
         for raw_word, candidate_word in zip(raw, words):
             if raw_word.isupper(): candidate_word=candidate_word.upper()
