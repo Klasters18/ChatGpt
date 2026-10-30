@@ -269,7 +269,7 @@ class App:
       else:
         c=getattr(key,"char",None)
         if c and c.isalpha():self.buffer=(self.buffer+c)[-64:]
-        elif c == "," and self.buffer and _script(self.buffer) == "en":
+        elif c == "," and self.buffer and script_of(self.buffer) == "en":
           # Do not split a potentially mistyped Cyrillic word at the physical comma
           # key: on RU/UA layout that key produces "б".
           self.buffer = (self.buffer + c)[-64:]
