@@ -19,6 +19,16 @@ class BundledLanguageDataTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result[0].lower(), "привет")
 
+    def test_real_word_frequency_recovers_full_user_phrase(self):
+        result = self.engine.suggest_phrase("b cltkfq xnj,s r ghbvthe")
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "и сделай чтобы к примеру")
+
+    def test_real_word_frequency_recovers_second_user_phrase(self):
+        result = self.engine.suggest_phrase("b ukfdyjt ghfdbkmyj yfgbcfnm")
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "и главное правильно написать")
+
     def test_real_word_frequency_does_not_rewrite_valid_english(self):
         self.assertIsNone(self.engine.suggest_phrase("this is a test"))
 
