@@ -305,7 +305,8 @@ class App:
     try:
       # Since this runs after the delimiter was inserted, remove it with the word
       # and type the corrected word plus the same delimiter back.
-      for _ in range(len(old) + (1 if delimiter is not None else 0)):
+      delimiter_len = 1 if delimiter in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab) else len(delimiter) if isinstance(delimiter, str) else 0
+      for _ in range(len(old) + delimiter_len):
         self.controller.tap(self.keyboard.Key.backspace)
       self.controller.type(new)
       if delimiter == self.keyboard.Key.space:self.controller.tap(self.keyboard.Key.space)
