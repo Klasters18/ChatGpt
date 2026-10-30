@@ -118,7 +118,12 @@ class LayoutEngine:
         improvement=score-baseline
         required=1.35 if len(raw)>=2 else 1.8
         if score < 2.2*len(raw) or improvement < required: return None
-        corrected=" ".join(words)
+        corrected_words=[]
+        for raw_word, candidate_word in zip(raw, words):
+            if raw_word.isupper(): candidate_word=candidate_word.upper()
+            elif raw_word[:1].isupper(): candidate_word=candidate_word.capitalize()
+            corrected_words.append(candidate_word)
+        corrected=" ".join(corrected_words)
         if corrected.lower()==phrase.lower(): return None
         return corrected,lang,score,baseline
 
