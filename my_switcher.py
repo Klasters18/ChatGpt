@@ -22,125 +22,13 @@ def log_debug(message):
     try:
         with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\n")
     except Exception: pass
-DEFAULT = {
- "ru": set("и в а я у к с о не на но да за по от до из мы вы он она они это что чтобы сделай сделай привет здравствуйте спасибо пожалуйста сегодня завтра работа работы классно компьютер клавиатура раскладка слово текст сообщение русский украинский английский язык проверка пример ошибка исправить отмена настройки приложение пароль хорошо можно нужно да нет как мой твой наш время деньги человек люди сайт ссылка браузер окно файл запуск словарь фраза примере примеру проверим главное правильно написать".split()),
- "ua": set("і в а я у к з о не на але так ні це що щоб зроби привіт доброго дякую будь ласка сьогодні завтра робота компютер програма клавіатура розкладка слово текст повідомлення український англійський мова перевірка приклад помилка виправити скасувати налаштування застосунок пароль добре можна потрібно як мій твій наш час гроші люди сайт посилання браузер вікно файл запуск словник фраза".split()),
- "en": set("hello hi thanks please today tomorrow work computer program keyboard layout word text message russian ukrainian english language test check example error correct undo settings application password good can need yes no what this my your our time money people website link browser window file launch dictionary".split())
-}
-# QWERTY physical-key approximation; punctuation varies across Windows layouts.
-EN = "`qwertyuiop[]asdfghjkl;'zxcvbnm,./"
-RU = "ёйцукенгшщзхъфывапролджэячсмитьбю."
-UA = "`йцукенгшщзхїфівапролджєячсмитьбю."
-MAPS = {
- ("en","ru"): dict(zip(EN,RU)), ("ru","en"): {v:k for k,v in dict(zip(EN,RU)).items()},
- ("en","ua"): dict(zip(EN,UA)), ("ua","en"): {v:k for k,v in dict(zip(EN,UA)).items()}
-}
-MAPS[("ru","ua")] = {c: MAPS[("en","ua")].get(MAPS[("ru","en")].get(c,c),c) for c in RU}
-MAPS[("ua","ru")] = {c: MAPS[("en","ru")].get(MAPS[("ua","en")].get(c,c),c) for c in UA}
-def convert(word, src, dst):
-    m = MAPS.get((src,dst),{})
-    return "".join((m.get(ch.lower(),ch).upper() if ch.isupper() else m.get(ch,ch)) for ch in word)
-# Language-frequency based decision, instead of requiring a tiny hand-made dictionary.
-# wordfreq language codes use "uk" for Ukrainian.
-LANG_CODE = {"en": "en", "ru": "ru", "ua": "uk"}
-MIN_WORD_ZIPF = 2.0
-MIN_IMPROVEMENT = 1.0
-
-@lru_cache(maxsize=20000)
-def _word_score(word, lang):
-    if zipf_frequency is None:
-        return 0.0
-    try:
-        return float(zipf_frequency(word.lower(), LANG_CODE[lang]))
-    except Exception:
-        return 0.0
-
-def _script(word):
-    latin = any("a" <= ch.lower() <= "z" for ch in word)
-    cyrillic = any(("а" <= ch.lower() <= "я") or ch.lower() in "ёіїєґ" for ch in word)
-    if latin and cyrillic:
-        return "mixed"
-    if latin:
-        return "en"
-    if cyrillic:
-        return "cyr"
-    return "other"
-
-def suggest_correction(word, custom_words=None):
-    """Return a different-layout candidate only when corpus frequency strongly supports it."""
-    if not zipf_frequency or len(word) < 1 or _script(word) in ("mixed", "other"):
-        return None
-    low = word.lower()
-    script = _script(low)
-    # Common one-letter words are essential for phrase-level layout recovery:
-    # e.g. "b cltkfq xnj,s r ghbvthe" -> "и сделай чтобы к примеру".
-    # Only correct a single Latin character when its layout mapping is a common
-    # standalone RU/UA word; ordinary English words are otherwise left alone.
-    if len(low) == 1 and script == "en":
-        # Standalone English keystrokes can be valid tokens ("a", "I"),
-        # but these specific keys are common Russian function words typed
-        # with the wrong layout. Prefer the explicit RU mapping for them.
-        single_letter_overrides = {"b": ("и", "ru"), "r": ("к", "ru")}
-        if low in single_letter_overrides:
-            candidate, dst = single_letter_overrides[low]
-            return candidate, dst, MIN_WORD_ZIPF + 1.0, _word_score(low, "en")
-        for dst in ("ru", "ua"):
-            candidate = convert(low, "en", dst).lower()
-            if custom_words and candidate in custom_words.get(dst, set()):
-                if _word_score(low, "en") < 2.5:
-                    return candidate, dst, MIN_WORD_ZIPF + 1.0, _word_score(low, "en")
-        return None
-    if script == "en":
-        current_score = _word_score(low, "en")
-        pairs = (("en", "ru"), ("en", "ua"))
-    else:
-        current_score = max(_word_score(low, "ru"), _word_score(low, "ua"))
-        pairs = (("ru", "en"), ("ua", "en"), ("ru", "ua"), ("ua", "ru"))
-    # Deterministic layout recovery for common dictionary words. If a Latin token
-    # is not a plausible English word but maps exactly to a known RU/UA word,
-    # correct it even when corpus scores are noisy. This changes layout only;
-    # it does not rewrite grammar or spelling.
-    if script == "en" and custom_words:
-        english_known = low in custom_words.get("en", set()) or _word_score(low, "en") >= MIN_WORD_ZIPF
-        if not english_known:
-            for dst in ("ru", "ua"):
-                candidate = convert(low, "en", dst).lower()
-                if candidate != low and candidate in custom_words.get(dst, set()):
-                    return candidate, dst, MIN_WORD_ZIPF + 1.0, _word_score(low, "en")
-    candidates = {}
-    for src, dst in pairs:
-        candidate = convert(low, src, dst).lower()
-        if candidate == low or not candidate.isalpha():
-            continue
-        score = _word_score(candidate, dst)
-        # User-added dictionary words can validate uncommon names and domain terms,
-        # but never override a clearly valid word in the current language.
-        if custom_words and candidate in custom_words.get(dst, set()):
-            score = max(score, MIN_WORD_ZIPF + 1.0)
-        if score > candidates.get(candidate, (0.0, ""))[0]:
-            candidates[candidate] = (score, dst)
-    if not candidates:
-        return None
-    candidate, (score, dst) = max(candidates.items(), key=lambda item: item[1][0])
-    # Strong deterministic fallback: if the mistyped token is not in the
-    # current-language dictionary but its layout-converted form is a known word,
-    # prefer the dictionary match even when the corpus score is noisy. This fixes
-    # common words such as ghbdtn -> привет, while keeping valid "hello" unchanged.
-    if custom_words:
-        current_lang = "en" if script == "en" else ("ua" if _word_score(low, "ua") > _word_score(low, "ru") else "ru")
-        current_known = low in custom_words.get(current_lang, set())
-        if not current_known and candidate in custom_words.get(dst, set()):
-            return candidate, dst, max(score, MIN_WORD_ZIPF + 1.0), current_score
-    # Do not change a plausible existing word for an equally plausible alternative.
-    if score < MIN_WORD_ZIPF or score - current_score < MIN_IMPROVEMENT:
-        return None
-    return candidate, dst, score, current_score
+from layout_engine import convert, suggest_correction, get_engine, script_of
 
 def load():
     s={"enabled":True,"startup":False,"excluded_apps":["code.exe","devenv.exe","powershell.exe","cmd.exe","windowsterminal.exe"]}
     try: s.update(json.loads(CONFIG.read_text(encoding="utf-8")))
     except Exception: pass
-    words={k:set(v) for k,v in DEFAULT.items()}
+    words={k:set() for k in ("ru","ua","en")}
     if not DICT.exists():
         DICT.write_text("# Format: ru слово1 слово2 | ua слово1 слово2 | en word1 word2\nru привет спасибо пожалуйста\nua привіт дякую будь ласка\nen hello thanks please\n",encoding="utf-8")
     for line in DICT.read_text(encoding="utf-8").splitlines():
@@ -196,7 +84,7 @@ def activate_layout(lang):
         return False
 class App:
  def __init__(self):
-    self.settings,self.words=load(); self.buffer=""; self.buffer_hwnd=None; self.inject=False; self.last=None; self.listener=None
+    self.settings,self.words=load(); self.buffer=""; self.buffer_hwnd=None; self.history=[]; self.inject=False; self.last=None; self.listener=None
     self.pending=queue.Queue()
     self.root=tk.Tk(); self.root.title("My Switcher"); self.root.geometry("560x520")
     self.enabled=tk.BooleanVar(value=self.settings["enabled"]); self.startup=tk.BooleanVar(value=self.settings["startup"])
@@ -347,8 +235,8 @@ class App:
  def process_pending(self):
     try:
       while True:
-        w, delimiter, target_hwnd = self.pending.get_nowait()
-        self.root.after(80, self.correct_after_delimiter, w, delimiter, target_hwnd)
+        w, delimiter, target_hwnd, phrase = self.pending.get_nowait()
+        self.root.after(80, self.correct_after_delimiter, w, delimiter, target_hwnd, phrase)
     except queue.Empty: pass
     except Exception as e: log_debug("pending queue exception: " + repr(e))
     try: self.root.after(30, self.process_pending)
@@ -358,7 +246,7 @@ class App:
     try:
       hwnd=foreground_window()
       if self.buffer and self.buffer_hwnd and hwnd != self.buffer_hwnd:
-        self.buffer=""
+        self.buffer=""; self.history=[]
       self.buffer_hwnd=hwnd
       if key in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab):
         w=self.buffer
@@ -371,9 +259,12 @@ class App:
           w = w[:-1]
           delimiter = ", "
         if len(w)>=1 and foreground_exe() not in self.settings.get("excluded_apps",[]):
-          # The listener runs on a background thread: queue work for Tk main thread.
-          self.pending.put((w, delimiter, hwnd))
-      elif key==self.keyboard.Key.backspace:self.buffer=self.buffer[:-1]
+          phrase = " ".join((self.history + [w])[-5:])
+          self.history = (self.history + [w])[-5:]
+          self.pending.put((w, delimiter, hwnd, phrase))
+        else:
+          self.history = []
+      elif key==self.keyboard.Key.backspace:self.buffer=self.buffer[:-1]; self.history=[]
       elif key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r,self.keyboard.Key.ctrl,self.keyboard.Key.ctrl_l,self.keyboard.Key.ctrl_r,self.keyboard.Key.alt,self.keyboard.Key.alt_l,self.keyboard.Key.alt_r):pass
       else:
         c=getattr(key,"char",None)
@@ -386,26 +277,28 @@ class App:
           w=self.buffer
           self.buffer=""
           if len(w)>=1 and foreground_exe() not in self.settings.get("excluded_apps",[]):
-            self.pending.put((w, c, hwnd))
+            phrase = " ".join((self.history + [w])[-5:])
+            self.pending.put((w, c, hwnd, phrase))
+          self.history=[]
         elif c:self.buffer=""
     except Exception as e:
       log_debug("on_press exception: " + repr(e) + " " + traceback.format_exc())
- def correct_after_delimiter(self,w,delimiter,target_hwnd=None):
+ def correct_after_delimiter(self,w,delimiter,target_hwnd=None,phrase=None):
     if target_hwnd and foreground_window() != target_hwnd:
       log_debug("correction skipped because focus changed")
       return
-    self.correct(w,delimiter)
- def correct(self,w,delimiter=None):
-    log_debug("word boundary received; length=" + str(len(w)) + "; foreground=" + foreground_exe())
-    decision = suggest_correction(w, self.words)
-    if not decision:
-      log_debug("no confident correction candidate; length=" + str(len(w)))
+    self.correct(w,delimiter,phrase or w)
+ def correct(self,w,delimiter=None,phrase=None):
+    phrase = phrase or w
+    log_debug("phrase boundary received; words=" + str(len(phrase.split())) + "; foreground=" + foreground_exe())
+    result = get_engine().suggest_phrase(phrase, self.words)
+    if not result:
+      log_debug("no confident phrase correction")
       return
-    candidate, dst, score, current_score = decision
-    new=candidate.upper() if w.isupper() else candidate.capitalize() if w[:1].isupper() else candidate
-    log_debug("confident correction selected; target=" + dst + " score=" + str(score) + " current=" + str(current_score))
-    self.replace_word(w, new, delimiter)
-    # Match Punto's core behavior: continue typing in the corrected language.
+    new_phrase, dst, score, current_score = result
+    log_debug("confident phrase correction selected; target=" + dst + " score=" + str(score) + " current=" + str(current_score))
+    self.replace_word(phrase, new_phrase, delimiter)
+    self.history = new_phrase.split()[-5:]
     activate_layout(dst)
  def replace_word(self, old, new, delimiter=None):
     self.inject=True
