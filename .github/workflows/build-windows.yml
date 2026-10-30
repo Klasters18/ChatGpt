@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "my_switcher.py"
+      - "layout_engine.py"
       - "grammar_check.py"
       - "requirements.txt"
       - "installer.iss"
