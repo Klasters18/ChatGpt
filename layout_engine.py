@@ -92,7 +92,12 @@ class LayoutEngine:
             elif script=="cyr" and lang=="en":
                 a=convert(raw,"ru","en").lower(); b=convert(raw,"ua","en").lower()
                 candidate=max((a,b),key=lambda w:self.word_score(w,"en"))
-            elif script=="cyr" and lang in ("ru","ua"): candidate=raw.lower()
+            elif script=="cyr" and lang=="ru":
+                a=raw.lower(); b=convert(raw,"ua","ru").lower()
+                candidate=max((a,b),key=lambda w:self.word_score(w,"ru"))
+            elif script=="cyr" and lang=="ua":
+                a=raw.lower(); b=convert(raw,"ru","ua").lower()
+                candidate=max((a,b),key=lambda w:self.word_score(w,"ua"))
             else: return None
             if not candidate or not candidate.replace(",","").isalpha(): return None
             out.append(candidate)
@@ -110,7 +115,6 @@ class LayoutEngine:
         ranked=[]
         for lang in ("en","ru","ua"):
             if source=="en" and lang=="en": continue
-            if source=="cyr" and lang in ("ru","ua"): continue
             words=self.candidate_words(raw,lang)
             if words: ranked.append((self.phrase_score(words,lang,custom_words),lang,words))
         if not ranked: return None
