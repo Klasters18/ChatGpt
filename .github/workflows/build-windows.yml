@@ -23,12 +23,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+      - name: Download offline phrase models (CC BY)
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force models | Out-Null
+          $base = "https://raw.githubusercontent.com/synth-inc/predictive-bigrams/76001baff94965b9cde7e07a4b0f007ead013a1d/data"
+          foreach ($lang in @("en", "ru", "uk")) {
+            Invoke-WebRequest -Uri "$base/${lang}_bigrams_50k.txt" -OutFile "models/${lang}_bigrams_50k.txt"
+          }
       - name: Check Python syntax
-        run: python -m py_compile my_switcher.py grammar_check.py
+        run: python -m py_compile my_switcher.py layout_engine.py grammar_check.py
       - name: Test keyboard layout mappings and grammar checker
         run: python -m unittest discover -s tests -v
       - name: Build portable EXE
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --collect-all wordfreq --collect-all langcodes --name MySwitcher my_switcher.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --collect-all wordfreq --collect-all langcodes --add-data "models;models" --name MySwitcher my_switcher.py
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
       - name: Build Windows installer
