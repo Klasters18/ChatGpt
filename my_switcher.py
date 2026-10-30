@@ -3,12 +3,6 @@ import ctypes, json, os, sys, time, traceback
 import tkinter as tk
 import threading
 import queue
-from functools import lru_cache
-
-try:
-    from wordfreq import zipf_frequency
-except ImportError:
-    zipf_frequency = None
 from tkinter import ttk, messagebox, simpledialog
 from pathlib import Path
 from grammar_check import check_text, GrammarServiceError
@@ -22,7 +16,7 @@ def log_debug(message):
     try:
         with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\n")
     except Exception: pass
-from layout_engine import convert, suggest_correction, get_engine, script_of
+from layout_engine import get_engine, script_of
 
 def load():
     s={"enabled":True,"startup":False,"excluded_apps":["code.exe","devenv.exe","powershell.exe","cmd.exe","windowsterminal.exe"]}
@@ -335,8 +329,11 @@ if __name__=="__main__":
     else:
         # Enforce a single running instance. Multiple keyboard listeners can
         # compete while replacing the same typed word and cause inconsistent results.
-        _instance_mutex = ctypes.windll.kernel32.CreateMutexW(None, True, "Local\\MySwitcher_SingleInstance")
-        _already_running = ctypes.windll.kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
+        _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        _kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]
+        _kernel32.CreateMutexW.restype = ctypes.c_void_p
+        _instance_mutex = _kernel32.CreateMutexW(None, True, "Local\\MySwitcher_SingleInstance")
+        _already_running = ctypes.get_last_error() == 183  # ERROR_ALREADY_EXISTS
         if _already_running:
             sys.exit(0)
         App()
