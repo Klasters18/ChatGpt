@@ -309,19 +309,25 @@ class App:
       elif delimiter == self.keyboard.Key.enter:self.controller.tap(self.keyboard.Key.enter)
       elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
       elif isinstance(delimiter, str):self.controller.type(delimiter)
-      self.last=(old,new,time.time())
+      self.last=(old,new,delimiter,time.time())
       log_debug("replacement completed; old_length=" + str(len(old)) + " new_length=" + str(len(new)))
     except Exception as e:
       log_debug("replace exception: " + repr(e) + " " + traceback.format_exc())
     finally:
       self.inject=False
  def undo(self):
-    if not self.last or time.time()-self.last[2]>60:
+    if not self.last or time.time()-self.last[3]>60:
       messagebox.showinfo("Отмена","Нет недавнего исправления");return
-    old,new,_=self.last;self.inject=True
+    old,new,delimiter,_=self.last;self.inject=True
     try:
-      for _ in new:self.controller.tap(self.keyboard.Key.backspace)
-      self.controller.type(old);self.last=None
+      delimiter_len = 1 if delimiter in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab) else len(delimiter) if isinstance(delimiter, str) else 0
+      for _ in range(len(new)+delimiter_len):self.controller.tap(self.keyboard.Key.backspace)
+      self.controller.type(old)
+      if delimiter == self.keyboard.Key.space:self.controller.tap(self.keyboard.Key.space)
+      elif delimiter == self.keyboard.Key.enter:self.controller.tap(self.keyboard.Key.enter)
+      elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
+      elif isinstance(delimiter,str):self.controller.type(delimiter)
+      self.last=None
     finally:self.inject=False
 if __name__=="__main__":
     if os.name!="nt":
