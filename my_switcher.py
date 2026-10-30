@@ -84,7 +84,7 @@ def activate_layout(lang):
         return False
 class App:
  def __init__(self):
-    self.settings,self.words=load(); self.buffer=""; self.buffer_hwnd=None; self.history=[]; self.inject=False; self.last=None; self.listener=None
+    self.settings,self.words=load(); self.buffer=""; self.buffer_hwnd=None; self.history=[]; self.state_lock=threading.Lock(); self.inject=False; self.last=None; self.listener=None
     self.pending=queue.Queue()
     self.root=tk.Tk(); self.root.title("My Switcher"); self.root.geometry("560x520")
     self.enabled=tk.BooleanVar(value=self.settings["enabled"]); self.startup=tk.BooleanVar(value=self.settings["startup"])
@@ -236,7 +236,7 @@ class App:
     try:
       while True:
         w, delimiter, target_hwnd, phrase = self.pending.get_nowait()
-        self.root.after(80, self.correct_after_delimiter, w, delimiter, target_hwnd, phrase)
+        self.correct_after_delimiter(w, delimiter, target_hwnd, phrase)
     except queue.Empty: pass
     except Exception as e: log_debug("pending queue exception: " + repr(e))
     try: self.root.after(30, self.process_pending)
@@ -259,8 +259,9 @@ class App:
           w = w[:-1]
           delimiter = ", "
         if len(w)>=1 and foreground_exe() not in self.settings.get("excluded_apps",[]):
-          phrase = " ".join((self.history + [w])[-5:])
-          self.history = (self.history + [w])[-5:]
+          with self.state_lock:
+            phrase = " ".join((self.history + [w])[-5:])
+            self.history = (self.history + [w])[-5:]
           self.pending.put((w, delimiter, hwnd, phrase))
         else:
           self.history = []
@@ -298,7 +299,8 @@ class App:
     new_phrase, dst, score, current_score = result
     log_debug("confident phrase correction selected; target=" + dst + " score=" + str(score) + " current=" + str(current_score))
     self.replace_word(phrase, new_phrase, delimiter)
-    self.history = new_phrase.split()[-5:]
+    with self.state_lock:
+      self.history = new_phrase.split()[-5:]
     activate_layout(dst)
  def replace_word(self, old, new, delimiter=None):
     self.inject=True
