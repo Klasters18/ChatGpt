@@ -285,7 +285,11 @@ class App:
     self.correct(w,delimiter,phrase or w)
  def correct(self,w,delimiter=None,phrase=None):
     phrase = phrase or w
-    log_debug("phrase boundary received; words=" + str(len(phrase.split())) + "; foreground=" + foreground_exe())
+    log_debug("phrase boundary received; text=" + repr(phrase) + "; words=" + str(len(phrase.split())) + "; foreground=" + foreground_exe())
+    try:
+      log_debug("phrase analysis: " + repr(get_engine().explain_phrase(phrase, self.words)))
+    except Exception as e:
+      log_debug("phrase analysis exception: " + repr(e))
     result = get_engine().suggest_phrase(phrase, self.words)
     if not result:
       log_debug("no confident phrase correction")
