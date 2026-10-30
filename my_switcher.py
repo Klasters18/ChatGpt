@@ -294,7 +294,7 @@ class App:
     log_debug("confident phrase correction selected; target=" + dst + " score=" + str(score) + " current=" + str(current_score))
     self.replace_word(phrase, new_phrase, delimiter)
     with self.state_lock:
-      self.history = new_phrase.split()[-5:]
+      self.history = new_phrase.split()[-5:] if delimiter == self.keyboard.Key.space else []
     activate_layout(dst)
  def replace_word(self, old, new, delimiter=None):
     self.inject=True
