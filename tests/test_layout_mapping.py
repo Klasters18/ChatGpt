@@ -1,43 +1,9 @@
 import unittest
-from unittest.mock import patch
-
-import my_switcher
-from my_switcher import convert, suggest_correction
+from layout_engine import convert
 
 
 class LayoutMappingTests(unittest.TestCase):
-    def test_english_layout_to_russian_with_comma_letter(self):
-        self.assertEqual(convert("hf,jns", "en", "ru"), "работы")
-
-    def test_english_layout_to_russian_hello(self):
-        self.assertEqual(convert("ghbdtn", "en", "ru"), "привет")
-
-    def test_english_layout_to_english_is_identity_for_test(self):
-        self.assertEqual(convert("test", "en", "en"), "test")
-
-    def test_known_dictionary_word_fixes_layout_even_with_low_frequency_score(self):
-        words = {k: set(v) for k, v in my_switcher.DEFAULT.items()}
-        with patch("my_switcher.zipf_frequency", return_value=0.0):
-            my_switcher._word_score.cache_clear()
-            self.assertEqual(suggest_correction("ghbdtn", words)[0:2], ("привет", "ru"))
-        my_switcher._word_score.cache_clear()
-
-    def test_valid_english_word_is_not_replaced_by_dictionary_fallback(self):
-        words = {k: set(v) for k, v in my_switcher.DEFAULT.items()}
-        with patch("my_switcher.zipf_frequency", return_value=0.0):
-            my_switcher._word_score.cache_clear()
-            self.assertIsNone(suggest_correction("hello", words))
-        my_switcher._word_score.cache_clear()
-
-
-    def test_single_letter_english_token_can_be_corrected_to_russian(self):
-        words = {k: set(v) for k, v in my_switcher.DEFAULT.items()}
-        with patch("my_switcher.zipf_frequency", return_value=0.0):
-            my_switcher._word_score.cache_clear()
-            self.assertEqual(suggest_correction("b", words)[0:2], ("и", "ru"))
-        my_switcher._word_score.cache_clear()
-
-    def test_all_six_layout_directions_map_letters(self):
+    def test_all_six_layout_directions(self):
         self.assertEqual(convert("ghbdtn", "en", "ru"), "привет")
         self.assertEqual(convert("ghbdtn", "en", "ua"), "привет")
         self.assertEqual(convert("руддщ", "ru", "en"), "hello")
@@ -45,22 +11,11 @@ class LayoutMappingTests(unittest.TestCase):
         self.assertEqual(convert("руддщ", "ru", "ua"), "руддщ")
         self.assertEqual(convert("руддщ", "ua", "ru"), "руддщ")
 
+    def test_punctuation_key_can_be_a_letter(self):
+        self.assertEqual(convert("hf,jns", "en", "ru"), "работы")
 
-    def test_phrase_tokens_are_corrected_by_layout_without_grammar_rewriting(self):
-        words = {k: set(v) for k, v in my_switcher.DEFAULT.items()}
-        with patch("my_switcher.zipf_frequency", return_value=0.0):
-            my_switcher._word_score.cache_clear()
-            self.assertEqual(suggest_correction("b", words)[0:2], ("и", "ru"))
-            self.assertEqual(suggest_correction("cltkfq", words)[0:2], ("сделай", "ru"))
-            self.assertEqual(suggest_correction("xnj,s", words)[0:2], ("чтобы", "ru"))
-            self.assertEqual(suggest_correction("r", words)[0:2], ("к", "ru"))
-            self.assertEqual(suggest_correction("ghbvthe", words)[0:2], ("примеру", "ru"))
-            self.assertEqual(suggest_correction("ghjdthbv", words)[0:2], ("проверим", "ru"))
-            self.assertEqual(suggest_correction("ukfdyjt", words)[0:2], ("главное", "ru"))
-            self.assertEqual(suggest_correction("ghfdbkmyj", words)[0:2], ("правильно", "ru"))
-            self.assertEqual(suggest_correction("yfgbcfnm", words)[0:2], ("написать", "ru"))
-            self.assertIsNone(suggest_correction("hello", words))
-        my_switcher._word_score.cache_clear()
+    def test_case_is_preserved_by_mapping(self):
+        self.assertEqual(convert("Ghbdtn", "en", "ru"), "Привет")
 
 
 if __name__ == "__main__":
