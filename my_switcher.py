@@ -30,7 +30,7 @@ def load():
     except Exception: pass
     words={k:set() for k in ("ru","ua","en")}
     if not DICT.exists():
-        DICT.write_text("# Format: ru слово1 слово2 | ua слово1 слово2 | en word1 word2\nru привет спасибо пожалуйста\nua привіт дякую будь ласка\nen hello thanks please\n",encoding="utf-8")
+        DICT.write_text("# Personal words only; format: ru слово1 слово2 | ua слово1 слово2 | en word1 word2\n",encoding="utf-8")
     for line in DICT.read_text(encoding="utf-8").splitlines():
         p=line.strip().lower().split()
         if len(p)>1 and p[0] in words: words[p[0]].update(p[1:])
