@@ -56,6 +56,15 @@ class LayoutEngineTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "и главное правильно написать")
 
+    def test_recovers_cyjdf_as_russian_snova(self):
+        def score(word, lang):
+            return 4.8 if word.lower() == "снова" and lang == "ru" else 0.1
+        with patch.object(self.engine, "word_score", side_effect=score):
+            result = self.engine.suggest_phrase("cyjdf")
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "снова")
+        self.assertEqual(result[1], "ru")
+
     def test_recovers_single_word_with_strong_lexical_evidence(self):
         with patch.object(self.engine, "word_score", side_effect=self.score):
             result = self.engine.suggest_phrase("ghbdtn")
