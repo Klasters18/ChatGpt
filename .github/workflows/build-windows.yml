@@ -2,10 +2,22 @@ name: Build My Switcher for Windows (EXE + Installer)
 
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "my_switcher.py"
+      - "layout_engine.py"
+      - "win_input.py"
+      - "grammar_check.py"
+      - "requirements.txt"
+      - "installer.iss"
+      - "tests/**"
+      - ".github/workflows/build-windows.yml"
   push:
     paths:
       - "my_switcher.py"
       - "layout_engine.py"
+      - "win_input.py"
       - "grammar_check.py"
       - "requirements.txt"
       - "installer.iss"

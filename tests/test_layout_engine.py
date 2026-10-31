@@ -36,6 +36,13 @@ class LayoutEngineTests(unittest.TestCase):
         self.assertEqual(convert("руддщ", "ru", "ua"), "руддщ")
         self.assertEqual(convert("руддщ", "ua", "ru"), "руддщ")
 
+    def test_cyjdf_maps_to_russian_snova(self):
+        self.assertEqual(convert("cyjdf", "en", "ru"), "снова")
+
+    def test_russian_ukrainian_distinguishing_keys(self):
+        self.assertEqual(convert("ы", "ru", "ua"), "і")
+        self.assertEqual(convert("і", "ua", "ru"), "ы")
+
     def test_recovers_phrase_instead_of_isolated_tokens(self):
         with patch.object(self.engine, "word_score", side_effect=self.score):
             result = self.engine.suggest_phrase("b cltkfq xnj,s r ghbvthe")
@@ -48,6 +55,34 @@ class LayoutEngineTests(unittest.TestCase):
             result = self.engine.suggest_phrase("b ukfdyjt ghfdbkmyj yfgbcfnm")
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "и главное правильно написать")
+
+    def test_all_six_directions_with_language_evidence(self):
+        cases = [
+            ("ghbdtn", "ru", "привет"),
+            ("csv", "ua", "сім"),
+            ("руддщ", "en", "hello"),
+            ("сім", "en", "csv"),
+            ("сым", "ua", "сім"),
+            ("мі тут", "ru", "мы тут"),
+        ]
+        for raw, target, expected in cases:
+            with self.subTest(raw=raw, target=target):
+                def score(word, lang, target=target, expected=expected):
+                    return 5.0 if lang == target and word.lower() in expected.split() else 0.1
+                with patch.object(self.engine, "word_score", side_effect=score):
+                    result = self.engine.suggest_phrase(raw)
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0].lower(), expected)
+                self.assertEqual(result[1], target)
+
+    def test_recovers_cyjdf_as_russian_snova(self):
+        def score(word, lang):
+            return 4.8 if word.lower() == "снова" and lang == "ru" else 0.1
+        with patch.object(self.engine, "word_score", side_effect=score):
+            result = self.engine.suggest_phrase("cyjdf")
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], "снова")
+        self.assertEqual(result[1], "ru")
 
     def test_recovers_single_word_with_strong_lexical_evidence(self):
         with patch.object(self.engine, "word_score", side_effect=self.score):
