@@ -17,7 +17,7 @@ def log_debug(message):
         with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\n")
     except Exception: pass
 from layout_engine import get_engine, script_of
-from win_input import send_backspaces, send_unicode_text, key_state
+from win_input import send_replacement, key_state
 
 def load():
     s={"enabled":True,"startup":False,"excluded_apps":["code.exe","devenv.exe","powershell.exe","cmd.exe","windowsterminal.exe"]}
@@ -295,8 +295,8 @@ class App:
     if target_hwnd and foreground_window() != target_hwnd:
       log_debug("correction skipped because focus changed")
       return
-    self.correct(w,delimiter,phrase or w)
- def correct(self,w,delimiter=None,phrase=None):
+    self.correct(w,delimiter,phrase or w,target_hwnd)
+ def correct(self,w,delimiter=None,phrase=None,target_hwnd=None):
     phrase = phrase or w
     log_debug("phrase boundary received; text=" + repr(phrase) + "; words=" + str(len(phrase.split())) + "; foreground=" + foreground_exe())
     try:
@@ -309,25 +309,27 @@ class App:
       return
     new_phrase, dst, score, current_score = result
     log_debug("confident phrase correction selected; target=" + dst + " score=" + str(score) + " current=" + str(current_score))
-    if not self.replace_word(phrase, new_phrase, delimiter):
+    if not self.replace_word(phrase, new_phrase, delimiter, target_hwnd):
       log_debug("correction transaction failed; layout not changed")
       return
     with self.state_lock:
       self.history = new_phrase.split()[-5:] if delimiter == self.keyboard.Key.space else []
     activate_layout(dst)
- def replace_word(self, old, new, delimiter=None):
+ def replace_word(self, old, new, delimiter=None, target_hwnd=None):
     self.inject=True
     caps_before=key_state(0x14)
     try:
-      # Replace token and delimiter as one serialized transaction. Unicode
-      # VK_PACKET input is independent of the active keyboard layout.
-      delimiter_len = 1 if delimiter in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab) else len(delimiter) if isinstance(delimiter, str) else 0
-      send_backspaces(len(old) + delimiter_len)
-      send_unicode_text(new)
-      if delimiter == self.keyboard.Key.space:self.controller.tap(self.keyboard.Key.space)
-      elif delimiter == self.keyboard.Key.enter:self.controller.tap(self.keyboard.Key.enter)
-      elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
-      elif isinstance(delimiter, str):send_unicode_text(delimiter)
+      if target_hwnd and foreground_window() != target_hwnd:
+        log_debug("replacement aborted because foreground changed before injection")
+        return False
+      if delimiter == self.keyboard.Key.space: kind, value = "space", ""
+      elif delimiter == self.keyboard.Key.enter: kind, value = "enter", ""
+      elif delimiter == self.keyboard.Key.tab: kind, value = "tab", ""
+      elif isinstance(delimiter, str): kind, value = "text", delimiter
+      else: kind, value = "none", ""
+      # Backspaces, Unicode replacement, and delimiter are submitted as one
+      # ordered Win32 input batch so focus/layout changes cannot split phases.
+      send_replacement(old, new, kind, value)
       self.last=(old,new,delimiter,time.time())
       caps_after=key_state(0x14)
       log_debug("replacement injected; old_length=" + str(len(old)) + " new_length=" + str(len(new)) + "; caps_before=" + str(caps_before) + "; caps_after=" + str(caps_after) + "; foreground=" + foreground_exe())
@@ -343,13 +345,12 @@ class App:
       messagebox.showinfo("Отмена","Нет недавнего исправления");return
     old,new,delimiter,_=self.last;self.inject=True
     try:
-      delimiter_len = 1 if delimiter in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab) else len(delimiter) if isinstance(delimiter, str) else 0
-      send_backspaces(len(new)+delimiter_len)
-      send_unicode_text(old)
-      if delimiter == self.keyboard.Key.space:self.controller.tap(self.keyboard.Key.space)
-      elif delimiter == self.keyboard.Key.enter:self.controller.tap(self.keyboard.Key.enter)
-      elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
-      elif isinstance(delimiter,str):send_unicode_text(delimiter)
+      if delimiter == self.keyboard.Key.space: kind, value = "space", ""
+      elif delimiter == self.keyboard.Key.enter: kind, value = "enter", ""
+      elif delimiter == self.keyboard.Key.tab: kind, value = "tab", ""
+      elif isinstance(delimiter, str): kind, value = "text", delimiter
+      else: kind, value = "none", ""
+      send_replacement(new, old, kind, value)
       self.last=None
     except Exception as e:
       log_debug("undo exception: " + repr(e) + " " + traceback.format_exc())
