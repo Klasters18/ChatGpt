@@ -52,12 +52,12 @@ def foreground_exe():
         finally:k.CloseHandle(h)
     except Exception:return ""
 
-def activate_layout(lang):
+def activate_layout(lang, hwnd_override=None):
     """Ask the foreground Windows text application to activate the target keyboard layout."""
     if os.name != "nt":
         return False
     klid = {"en": "00000409", "ru": "00000419", "ua": "00000422"}.get(lang)
-    hwnd = foreground_window()
+    hwnd = hwnd_override or foreground_window()
     if not klid or not hwnd:
         return False
     try:
@@ -298,9 +298,10 @@ class App:
     self.correct(w,delimiter,phrase or w,target_hwnd)
  def correct(self,w,delimiter=None,phrase=None,target_hwnd=None):
     phrase = phrase or w
-    log_debug("phrase boundary received; text=" + repr(phrase) + "; words=" + str(len(phrase.split())) + "; foreground=" + foreground_exe())
+    log_debug("phrase boundary received; chars=" + str(len(phrase)) + "; words=" + str(len(phrase.split())) + "; foreground=" + foreground_exe())
     try:
-      log_debug("phrase analysis: " + repr(get_engine().explain_phrase(phrase, self.words)))
+      analysis = get_engine().explain_phrase(phrase, self.words)
+      log_debug("phrase analysis summary: source=" + str(analysis.get("source")) + "; baseline=" + str(analysis.get("baseline")) + "; candidate_languages=" + ",".join(analysis.get("candidates", {}).keys()))
     except Exception as e:
       log_debug("phrase analysis exception: " + repr(e))
     result = get_engine().suggest_phrase(phrase, self.words)
@@ -314,7 +315,7 @@ class App:
       return
     with self.state_lock:
       self.history = new_phrase.split()[-5:] if delimiter == self.keyboard.Key.space else []
-    activate_layout(dst)
+    activate_layout(dst, target_hwnd)
  def replace_word(self, old, new, delimiter=None, target_hwnd=None):
     self.inject=True
     caps_before=key_state(0x14)
