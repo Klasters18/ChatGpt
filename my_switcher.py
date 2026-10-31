@@ -298,7 +298,7 @@ class App:
     self.correct(w,delimiter,phrase or w,target_hwnd)
  def correct(self,w,delimiter=None,phrase=None,target_hwnd=None):
     phrase = phrase or w
-    log_debug("phrase boundary received; chars=" + str(len(phrase)) + "; words=" + str(len(phrase.split())) + "; foreground=" + foreground_exe())
+    log_debug("phrase boundary received; chars=" + str(len(phrase)) + "; words=" + str(len(phrase.split())) + "; caps_lock=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
     try:
       analysis = get_engine().explain_phrase(phrase, self.words)
       log_debug("phrase analysis summary: source=" + str(analysis.get("source")) + "; baseline=" + str(analysis.get("baseline")) + "; candidate_languages=" + ",".join(analysis.get("candidates", {}).keys()))
