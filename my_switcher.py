@@ -41,11 +41,7 @@ def foreground_window():
 def foreground_exe():
     try:
         u=ctypes.windll.user32; k=ctypes.windll.kernel32
-        if key == self.keyboard.Key.caps_lock:
-         log_debug("physical CapsLock press; toggle_state=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
-       elif key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r):
-         log_debug("physical Shift press; caps_lock=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
-       hwnd=foreground_window(); pid=ctypes.c_ulong()
+        hwnd=foreground_window(); pid=ctypes.c_ulong()
         if not hwnd:return ""
         u.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
         h=k.OpenProcess(0x1000,False,pid.value)
