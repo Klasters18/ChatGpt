@@ -25,6 +25,16 @@ class UnicodeInputTests(unittest.TestCase):
         self.assertTrue(all(event.ki.wVk == win_input.VK_BACK for event in events))
         self.assertFalse(any(event.ki.wVk == 0x14 for event in events))
 
+    def test_replacement_is_one_batch_and_restores_space(self):
+        with patch.object(win_input, "_send", return_value=14) as send:
+            result = win_input.send_replacement("abc", "xy", "space")
+        self.assertEqual(result, 14)
+        events = send.call_args.args[0]
+        self.assertEqual(len(events), 14)
+        self.assertTrue(all(e.ki.wVk == win_input.VK_BACK for e in events[:8]))
+        self.assertEqual([e.ki.wScan for e in events[8:]], [ord("x"), ord("x"), ord("y"), ord("y"), ord(" "), ord(" ")])
+        self.assertFalse(any(e.ki.wVk == 0x14 for e in events))
+
     def test_supplementary_unicode_uses_surrogate_pair(self):
         with patch.object(win_input, "_send", return_value=4) as send:
             win_input.send_unicode_text("😀")
