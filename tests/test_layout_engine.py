@@ -36,6 +36,13 @@ class LayoutEngineTests(unittest.TestCase):
         self.assertEqual(convert("руддщ", "ru", "ua"), "руддщ")
         self.assertEqual(convert("руддщ", "ua", "ru"), "руддщ")
 
+    def test_cyjdf_maps_to_russian_snova(self):
+        self.assertEqual(convert("cyjdf", "en", "ru"), "снова")
+
+    def test_russian_ukrainian_distinguishing_keys(self):
+        self.assertEqual(convert("ы", "ru", "ua"), "і")
+        self.assertEqual(convert("і", "ua", "ru"), "ы")
+
     def test_recovers_phrase_instead_of_isolated_tokens(self):
         with patch.object(self.engine, "word_score", side_effect=self.score):
             result = self.engine.suggest_phrase("b cltkfq xnj,s r ghbvthe")
