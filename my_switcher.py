@@ -340,13 +340,15 @@ class App:
     old,new,delimiter,_=self.last;self.inject=True
     try:
       delimiter_len = 1 if delimiter in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab) else len(delimiter) if isinstance(delimiter, str) else 0
-      for _ in range(len(new)+delimiter_len):self.controller.tap(self.keyboard.Key.backspace)
-      self.controller.type(old)
+      send_backspaces(len(new)+delimiter_len)
+      send_unicode_text(old)
       if delimiter == self.keyboard.Key.space:self.controller.tap(self.keyboard.Key.space)
       elif delimiter == self.keyboard.Key.enter:self.controller.tap(self.keyboard.Key.enter)
       elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
-      elif isinstance(delimiter,str):self.controller.type(delimiter)
+      elif isinstance(delimiter,str):send_unicode_text(delimiter)
       self.last=None
+    except Exception as e:
+      log_debug("undo exception: " + repr(e) + " " + traceback.format_exc())
     finally:self.inject=False
 if __name__=="__main__":
     if os.name!="nt":
