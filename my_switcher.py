@@ -249,6 +249,10 @@ class App:
     except Exception as e:
       log_debug("on_release diagnostic exception: " + repr(e))
  def on_press(self,key):
+    if self.keyboard and key == self.keyboard.Key.caps_lock:
+      log_debug("physical CapsLock press; toggle_state=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
+    elif self.keyboard and key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r):
+      log_debug("physical Shift press; caps_lock=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
     if self.inject or not self.settings.get("enabled",True):return
     try:
       hwnd=foreground_window()
@@ -309,7 +313,9 @@ class App:
       return
     new_phrase, dst, score, current_score = result
     log_debug("confident phrase correction selected; target=" + dst + " score=" + str(score) + " current=" + str(current_score))
-    self.replace_word(phrase, new_phrase, delimiter)
+    if not self.replace_word(phrase, new_phrase, delimiter):
+      log_debug("correction transaction failed; layout not changed")
+      return
     with self.state_lock:
       self.history = new_phrase.split()[-5:] if delimiter == self.keyboard.Key.space else []
     activate_layout(dst)
@@ -330,8 +336,10 @@ class App:
       caps_after=key_state(0x14)
       log_debug("replacement injected; old_length=" + str(len(old)) + " new_length=" + str(len(new)) + "; caps_before=" + str(caps_before) + "; caps_after=" + str(caps_after) + "; foreground=" + foreground_exe())
       if caps_before != caps_after: log_debug("WARNING CapsLock state changed during replacement transaction")
+      return True
     except Exception as e:
       log_debug("replace exception: " + repr(e) + " " + traceback.format_exc() + "; caps_before=" + str(caps_before) + "; caps_after=" + str(key_state(0x14)))
+      return False
     finally:
       self.inject=False
  def undo(self):
