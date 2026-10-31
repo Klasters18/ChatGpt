@@ -61,7 +61,7 @@ class LayoutEngineTests(unittest.TestCase):
             ("ghbdtn", "ru", "привет"),
             ("csv", "ua", "сім"),
             ("руддщ", "en", "hello"),
-            ("руддщ", "en", "hello"),
+            ("сім", "en", "csv"),
             ("сым", "ua", "сім"),
             ("мі", "ru", "мы"),
         ]
