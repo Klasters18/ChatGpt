@@ -56,6 +56,25 @@ class LayoutEngineTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "и главное правильно написать")
 
+    def test_all_six_directions_with_language_evidence(self):
+        cases = [
+            ("ghbdtn", "ru", "привет"),
+            ("csv", "ua", "сім"),
+            ("руддщ", "en", "hello"),
+            ("руддщ", "en", "hello"),
+            ("сым", "ua", "сім"),
+            ("мі", "ru", "мы"),
+        ]
+        for raw, target, expected in cases:
+            with self.subTest(raw=raw, target=target):
+                def score(word, lang, target=target, expected=expected):
+                    return 5.0 if lang == target and word.lower() == expected else 0.1
+                with patch.object(self.engine, "word_score", side_effect=score):
+                    result = self.engine.suggest_phrase(raw)
+                self.assertIsNotNone(result)
+                self.assertEqual(result[0].lower(), expected)
+                self.assertEqual(result[1], target)
+
     def test_recovers_cyjdf_as_russian_snova(self):
         def score(word, lang):
             return 4.8 if word.lower() == "снова" and lang == "ru" else 0.1
