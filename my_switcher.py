@@ -17,6 +17,7 @@ def log_debug(message):
         with LOG.open("a", encoding="utf-8") as fp: fp.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(message) + "\n")
     except Exception: pass
 from layout_engine import get_engine, script_of
+from win_input import send_backspaces, send_unicode_text, key_state
 
 def load():
     s={"enabled":True,"startup":False,"excluded_apps":["code.exe","devenv.exe","powershell.exe","cmd.exe","windowsterminal.exe"]}
@@ -40,7 +41,11 @@ def foreground_window():
 def foreground_exe():
     try:
         u=ctypes.windll.user32; k=ctypes.windll.kernel32
-        hwnd=foreground_window(); pid=ctypes.c_ulong()
+        if key == self.keyboard.Key.caps_lock:
+         log_debug("physical CapsLock press; toggle_state=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
+       elif key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r):
+         log_debug("physical Shift press; caps_lock=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
+       hwnd=foreground_window(); pid=ctypes.c_ulong()
         if not hwnd:return ""
         u.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
         h=k.OpenProcess(0x1000,False,pid.value)
@@ -223,7 +228,7 @@ class App:
     try:
       from pynput import keyboard
       self.keyboard=keyboard; self.controller=keyboard.Controller()
-      self.listener=keyboard.Listener(on_press=self.on_press);self.listener.daemon=True;self.listener.start()
+      self.listener=keyboard.Listener(on_press=self.on_press,on_release=self.on_release);self.listener.daemon=True;self.listener.start()
       self.status.set("Работает локально · RU / UA / EN")
     except Exception as e:self.status.set("Ошибка клавиатурного модуля: "+str(e))
  def process_pending(self):
@@ -235,6 +240,14 @@ class App:
     except Exception as e: log_debug("pending queue exception: " + repr(e))
     try: self.root.after(30, self.process_pending)
     except Exception: pass
+ def on_release(self,key):
+    try:
+      if self.keyboard and key == self.keyboard.Key.caps_lock:
+        log_debug("physical CapsLock release; toggle_state=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
+      elif self.keyboard and key in (self.keyboard.Key.shift,self.keyboard.Key.shift_l,self.keyboard.Key.shift_r):
+        log_debug("physical Shift release; caps_lock=" + str(key_state(0x14)) + "; foreground=" + foreground_exe())
+    except Exception as e:
+      log_debug("on_release diagnostic exception: " + repr(e))
  def on_press(self,key):
     if self.inject or not self.settings.get("enabled",True):return
     try:
@@ -302,21 +315,23 @@ class App:
     activate_layout(dst)
  def replace_word(self, old, new, delimiter=None):
     self.inject=True
+    caps_before=key_state(0x14)
     try:
-      # Since this runs after the delimiter was inserted, remove it with the word
-      # and type the corrected word plus the same delimiter back.
+      # Replace token and delimiter as one serialized transaction. Unicode
+      # VK_PACKET input is independent of the active keyboard layout.
       delimiter_len = 1 if delimiter in (self.keyboard.Key.space, self.keyboard.Key.enter, self.keyboard.Key.tab) else len(delimiter) if isinstance(delimiter, str) else 0
-      for _ in range(len(old) + delimiter_len):
-        self.controller.tap(self.keyboard.Key.backspace)
-      self.controller.type(new)
+      send_backspaces(len(old) + delimiter_len)
+      send_unicode_text(new)
       if delimiter == self.keyboard.Key.space:self.controller.tap(self.keyboard.Key.space)
       elif delimiter == self.keyboard.Key.enter:self.controller.tap(self.keyboard.Key.enter)
       elif delimiter == self.keyboard.Key.tab:self.controller.tap(self.keyboard.Key.tab)
-      elif isinstance(delimiter, str):self.controller.type(delimiter)
+      elif isinstance(delimiter, str):send_unicode_text(delimiter)
       self.last=(old,new,delimiter,time.time())
-      log_debug("replacement completed; old_length=" + str(len(old)) + " new_length=" + str(len(new)))
+      caps_after=key_state(0x14)
+      log_debug("replacement injected; old_length=" + str(len(old)) + " new_length=" + str(len(new)) + "; caps_before=" + str(caps_before) + "; caps_after=" + str(caps_after) + "; foreground=" + foreground_exe())
+      if caps_before != caps_after: log_debug("WARNING CapsLock state changed during replacement transaction")
     except Exception as e:
-      log_debug("replace exception: " + repr(e) + " " + traceback.format_exc())
+      log_debug("replace exception: " + repr(e) + " " + traceback.format_exc() + "; caps_before=" + str(caps_before) + "; caps_after=" + str(key_state(0x14)))
     finally:
       self.inject=False
  def undo(self):
