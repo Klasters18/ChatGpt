@@ -63,12 +63,12 @@ class LayoutEngineTests(unittest.TestCase):
             ("руддщ", "en", "hello"),
             ("сім", "en", "csv"),
             ("сым", "ua", "сім"),
-            ("мі", "ru", "мы"),
+            ("мі тут", "ru", "мы тут"),
         ]
         for raw, target, expected in cases:
             with self.subTest(raw=raw, target=target):
                 def score(word, lang, target=target, expected=expected):
-                    return 5.0 if lang == target and word.lower() == expected else 0.1
+                    return 5.0 if lang == target and word.lower() in expected.split() else 0.1
                 with patch.object(self.engine, "word_score", side_effect=score):
                     result = self.engine.suggest_phrase(raw)
                 self.assertIsNotNone(result)
